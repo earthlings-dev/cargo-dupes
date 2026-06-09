@@ -4,6 +4,7 @@ use std::process;
 use clap::Parser;
 
 use dupes_core::cli::{self, CliOverrides, Command, OutputFormat};
+use dupes_core::code_unit::DetectionDimension;
 use dupes_rust::RustAnalyzer;
 
 #[derive(Parser)]
@@ -52,9 +53,29 @@ struct Cli {
     #[arg(long, short = 's', global = true)]
     sub_function: bool,
 
+    /// Disable sub-function duplicate detection.
+    #[arg(long, global = true, conflicts_with = "sub_function")]
+    no_sub_function: bool,
+
     /// Minimum AST node count for sub-function units.
     #[arg(long, global = true)]
     min_sub_nodes: Option<usize>,
+
+    /// Disable a detection dimension (can be repeated).
+    #[arg(long, global = true)]
+    disable_dimension: Vec<DetectionDimension>,
+
+    /// Minimum token count for token-window detection.
+    #[arg(long, global = true)]
+    token_min_tokens: Option<usize>,
+
+    /// Similarity threshold for normalized token near-duplicates.
+    #[arg(long, global = true)]
+    token_threshold: Option<f64>,
+
+    /// Minimum line count for line-window detection.
+    #[arg(long, global = true)]
+    line_min_lines: Option<usize>,
 }
 
 fn main() {
@@ -68,7 +89,12 @@ fn main() {
         exclude,
         exclude_tests,
         sub_function,
+        no_sub_function,
         min_sub_nodes,
+        disable_dimension,
+        token_min_tokens,
+        token_threshold,
+        line_min_lines,
         ..
     } = Cli::parse();
 
@@ -93,8 +119,19 @@ fn main() {
                 threshold,
                 exclude,
                 exclude_tests: if exclude_tests { Some(true) } else { None },
-                sub_function: if sub_function { Some(true) } else { None },
+                sub_function: if no_sub_function {
+                    Some(false)
+                } else if sub_function {
+                    Some(true)
+                } else {
+                    None
+                },
                 min_sub_nodes,
+                disabled_dimensions: disable_dimension,
+                token_min_tokens,
+                token_threshold,
+                line_min_lines,
+                generic_extensions: vec!["rs".to_string()],
             };
             let output = match cli::run_analysis(&analyzer, &root, format, &overrides) {
                 Ok(o) => o,

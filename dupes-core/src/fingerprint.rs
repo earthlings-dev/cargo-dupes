@@ -1,6 +1,4 @@
-use std::collections::hash_map::DefaultHasher;
 use std::fmt;
-use std::hash::{Hash, Hasher};
 
 use crate::node::NormalizedNode;
 
@@ -9,21 +7,31 @@ use crate::node::NormalizedNode;
 pub struct Fingerprint(u64);
 
 impl Fingerprint {
+    /// Compute a deterministic fingerprint from bytes.
+    #[must_use]
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let digest = blake3::hash(bytes);
+        let mut prefix = [0_u8; 8];
+        prefix.copy_from_slice(&digest.as_bytes()[..8]);
+        Self(u64::from_be_bytes(prefix))
+    }
+
+    /// Compute a deterministic fingerprint from a debug representation.
+    #[must_use]
+    fn from_debug(value: &impl std::fmt::Debug) -> Self {
+        Self::from_bytes(format!("{value:?}").as_bytes())
+    }
+
     /// Compute a fingerprint from a normalized node.
     #[must_use]
     pub fn from_node(node: &NormalizedNode) -> Self {
-        let mut hasher = DefaultHasher::new();
-        node.hash(&mut hasher);
-        Self(hasher.finish())
+        Self::from_debug(node)
     }
 
     /// Compute a fingerprint from a signature + body pair.
     #[must_use]
     pub fn from_sig_and_body(sig: &NormalizedNode, body: &NormalizedNode) -> Self {
-        let mut hasher = DefaultHasher::new();
-        sig.hash(&mut hasher);
-        body.hash(&mut hasher);
-        Self(hasher.finish())
+        Self::from_bytes(format!("{sig:?}\n{body:?}").as_bytes())
     }
 
     /// Compute a composite fingerprint from a set of fingerprints.
@@ -32,11 +40,7 @@ impl Fingerprint {
     pub fn from_fingerprints(fps: &[Self]) -> Self {
         let mut sorted: Vec<u64> = fps.iter().map(|fp| fp.0).collect();
         sorted.sort_unstable();
-        let mut hasher = DefaultHasher::new();
-        for v in &sorted {
-            v.hash(&mut hasher);
-        }
-        Self(hasher.finish())
+        Self::from_bytes(format!("{sorted:?}").as_bytes())
     }
 
     /// Get the raw u64 value.

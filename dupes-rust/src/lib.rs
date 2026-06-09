@@ -43,6 +43,17 @@ impl LanguageAnalyzer for RustAnalyzer {
         parser::parse_source(path, source, config.min_nodes, config.min_lines)
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })
     }
+
+    fn parse_sub_units(
+        &self,
+        path: &Path,
+        source: &str,
+        _config: &AnalysisConfig,
+        min_nodes: usize,
+    ) -> Result<Vec<CodeUnit>, Box<dyn std::error::Error + Send + Sync>> {
+        parser::parse_sub_units(path, source, min_nodes)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })
+    }
 }
 
 #[cfg(test)]

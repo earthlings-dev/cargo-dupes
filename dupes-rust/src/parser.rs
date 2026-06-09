@@ -4,7 +4,7 @@ use syn::spanned::Spanned;
 use syn::visit::Visit;
 
 use dupes_core::fingerprint::Fingerprint;
-use dupes_core::node::NormalizedNode;
+use dupes_core::node::{NodeKind, NormalizationContext, NormalizedNode};
 
 use crate::normalizer;
 
@@ -13,6 +13,198 @@ pub use dupes_core::code_unit::{CodeUnit, CodeUnitKind};
 /// Check if attributes contain `#[test]`.
 fn has_test_attr(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("test"))
+}
+
+/// Extracts nested code units with precise spans.
+struct SubUnitExtractor {
+    file: PathBuf,
+    min_node_count: usize,
+    units: Vec<CodeUnit>,
+    current_parent: Option<String>,
+    in_test_context: bool,
+}
+
+impl SubUnitExtractor {
+    const fn new(file: PathBuf, min_node_count: usize) -> Self {
+        Self {
+            file,
+            min_node_count,
+            units: Vec::new(),
+            current_parent: None,
+            in_test_context: false,
+        }
+    }
+
+    fn with_parent(&mut self, parent: String, is_test: bool, visit: impl FnOnce(&mut Self)) {
+        let previous_parent = self.current_parent.replace(parent);
+        let previous_test = self.in_test_context;
+        self.in_test_context = is_test;
+        visit(self);
+        self.current_parent = previous_parent;
+        self.in_test_context = previous_test;
+    }
+
+    fn add_expr_unit(
+        &mut self,
+        kind: CodeUnitKind,
+        description: String,
+        expr: &syn::Expr,
+        line_start: usize,
+        line_end: usize,
+    ) {
+        let mut ctx = NormalizationContext::new();
+        let body =
+            dupes_core::node::reindex_placeholders(&normalizer::normalize_expr(expr, &mut ctx));
+        self.add_normalized_unit(kind, description, body, line_start, line_end);
+    }
+
+    fn add_block_unit(&mut self, kind: CodeUnitKind, description: String, block: &syn::Block) {
+        let mut ctx = NormalizationContext::new();
+        let body =
+            dupes_core::node::reindex_placeholders(&normalizer::normalize_block(block, &mut ctx));
+        let line_start = block.brace_token.span.open().start().line;
+        let line_end = block.brace_token.span.close().end().line;
+        self.add_normalized_unit(kind, description, body, line_start, line_end);
+    }
+
+    fn add_normalized_unit(
+        &mut self,
+        kind: CodeUnitKind,
+        description: String,
+        body: NormalizedNode,
+        line_start: usize,
+        line_end: usize,
+    ) {
+        let node_count = normalizer::count_nodes(&body);
+        if node_count < self.min_node_count {
+            return;
+        }
+        self.units.push(CodeUnit {
+            kind,
+            name: description,
+            file: self.file.clone(),
+            line_start,
+            line_end,
+            signature: NormalizedNode::leaf(NodeKind::Opaque),
+            fingerprint: Fingerprint::from_node(&body),
+            node_count,
+            body,
+            parent_name: self.current_parent.clone(),
+            is_test: self.in_test_context,
+        });
+    }
+}
+
+impl<'ast> Visit<'ast> for SubUnitExtractor {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let is_test =
+            self.in_test_context || has_test_attr(&node.attrs) || has_cfg_test_attr(&node.attrs);
+        self.with_parent(node.sig.ident.to_string(), is_test, |visitor| {
+            syn::visit::visit_block(visitor, &node.block);
+        });
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let prev = self.in_test_context;
+        if has_cfg_test_attr(&node.attrs) {
+            self.in_test_context = true;
+        }
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_context = prev;
+    }
+
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        let type_name = quote_type(&node.self_ty);
+        let is_trait_impl = node.trait_.is_some();
+        let trait_name = node
+            .trait_
+            .as_ref()
+            .map(|(_, path, _)| {
+                path.segments
+                    .iter()
+                    .map(|s| s.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::")
+            })
+            .unwrap_or_default();
+        let prev_test = self.in_test_context;
+        if has_cfg_test_attr(&node.attrs) {
+            self.in_test_context = true;
+        }
+        for item in &node.items {
+            if let syn::ImplItem::Fn(method) = item {
+                let method_name = method.sig.ident.to_string();
+                let full_name = if is_trait_impl {
+                    format!("<{type_name} as {trait_name}>::{method_name}")
+                } else {
+                    format!("{type_name}::{method_name}")
+                };
+                self.with_parent(full_name, self.in_test_context, |visitor| {
+                    syn::visit::visit_block(visitor, &method.block);
+                });
+            }
+        }
+        self.in_test_context = prev_test;
+    }
+
+    fn visit_expr_if(&mut self, node: &'ast syn::ExprIf) {
+        self.add_block_unit(
+            CodeUnitKind::IfBranch,
+            "if-then branch".to_string(),
+            &node.then_branch,
+        );
+        if let Some((_, else_expr)) = &node.else_branch {
+            let span = else_expr.span();
+            self.add_expr_unit(
+                CodeUnitKind::IfBranch,
+                "if-else branch".to_string(),
+                else_expr,
+                span.start().line,
+                span.end().line,
+            );
+        }
+        syn::visit::visit_expr_if(self, node);
+    }
+
+    fn visit_expr_match(&mut self, node: &'ast syn::ExprMatch) {
+        for (idx, arm) in node.arms.iter().enumerate() {
+            let span = arm.body.span();
+            self.add_expr_unit(
+                CodeUnitKind::MatchArm,
+                format!("match arm {}", idx + 1),
+                &arm.body,
+                span.start().line,
+                span.end().line,
+            );
+        }
+        syn::visit::visit_expr_match(self, node);
+    }
+
+    fn visit_expr_loop(&mut self, node: &'ast syn::ExprLoop) {
+        self.add_block_unit(CodeUnitKind::LoopBody, "loop body".to_string(), &node.body);
+        syn::visit::visit_expr_loop(self, node);
+    }
+
+    fn visit_expr_while(&mut self, node: &'ast syn::ExprWhile) {
+        self.add_block_unit(CodeUnitKind::LoopBody, "while body".to_string(), &node.body);
+        syn::visit::visit_expr_while(self, node);
+    }
+
+    fn visit_expr_for_loop(&mut self, node: &'ast syn::ExprForLoop) {
+        self.add_block_unit(CodeUnitKind::LoopBody, "for body".to_string(), &node.body);
+        syn::visit::visit_expr_for_loop(self, node);
+    }
+
+    fn visit_expr_closure(&mut self, node: &'ast syn::ExprClosure) {
+        if let syn::Expr::Block(block) = &*node.body {
+            self.add_block_unit(
+                CodeUnitKind::Block,
+                "closure body".to_string(),
+                &block.block,
+            );
+        }
+        syn::visit::visit_expr_closure(self, node);
+    }
 }
 
 /// Check if attributes contain `#[cfg(test)]`.
@@ -254,6 +446,21 @@ pub fn parse_source(
         .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
 
     let mut extractor = CodeUnitExtractor::new(path.to_path_buf(), min_node_count, min_line_count);
+    extractor.visit_file(&file);
+
+    Ok(extractor.units)
+}
+
+/// Parse Rust source code and extract nested sub-function units.
+pub fn parse_sub_units(
+    path: &Path,
+    source: &str,
+    min_node_count: usize,
+) -> Result<Vec<CodeUnit>, String> {
+    let file = syn::parse_file(source)
+        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))?;
+
+    let mut extractor = SubUnitExtractor::new(path.to_path_buf(), min_node_count);
     extractor.visit_file(&file);
 
     Ok(extractor.units)

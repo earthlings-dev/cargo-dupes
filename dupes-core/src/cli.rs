@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::AnalysisResult;
 use crate::analyzer::LanguageAnalyzer;
+use crate::code_unit::DetectionDimension;
 use crate::config::Config;
 use crate::fingerprint::Fingerprint;
 use crate::ignore::{self, IgnoreEntry};
@@ -174,6 +175,11 @@ pub struct CliOverrides {
     pub exclude_tests: Option<bool>,
     pub sub_function: Option<bool>,
     pub min_sub_nodes: Option<usize>,
+    pub disabled_dimensions: Vec<DetectionDimension>,
+    pub token_min_tokens: Option<usize>,
+    pub token_threshold: Option<f64>,
+    pub line_min_lines: Option<usize>,
+    pub generic_extensions: Vec<String>,
 }
 
 /// Result of [`run_analysis`].
@@ -212,6 +218,18 @@ pub fn apply_overrides(config: &mut Config, overrides: &CliOverrides) {
     if let Some(min_sub_nodes) = overrides.min_sub_nodes {
         config.min_sub_nodes = min_sub_nodes;
     }
+    for &dimension in &overrides.disabled_dimensions {
+        config.disable_dimension(dimension);
+    }
+    if let Some(token_min_tokens) = overrides.token_min_tokens {
+        config.token_min_tokens = token_min_tokens;
+    }
+    if let Some(token_threshold) = overrides.token_threshold {
+        config.token_similarity_threshold = token_threshold;
+    }
+    if let Some(line_min_lines) = overrides.line_min_lines {
+        config.line_min_lines = line_min_lines;
+    }
 }
 
 /// Create a reporter for the given output format.
@@ -249,13 +267,34 @@ pub fn run_analysis(
                 .map(std::string::ToString::to_string)
                 .collect(),
         );
-    let files = crate::scanner::scan_files(&scan_config);
+    let ast_files = crate::scanner::scan_files(&scan_config);
 
-    if files.is_empty() {
+    let generic_files = if config.dimension_enabled(DetectionDimension::TokenNormalized)
+        || config.dimension_enabled(DetectionDimension::TokenRaw)
+        || config.dimension_enabled(DetectionDimension::Line)
+    {
+        let generic_extensions = if overrides.generic_extensions.is_empty() {
+            analyzer
+                .file_extensions()
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect()
+        } else {
+            overrides.generic_extensions.clone()
+        };
+        let generic_scan_config = crate::scanner::ScanConfig::new(config.root.clone())
+            .with_excludes(config.exclude.clone())
+            .with_extensions(generic_extensions);
+        crate::scanner::scan_files(&generic_scan_config)
+    } else {
+        Vec::new()
+    };
+
+    if ast_files.is_empty() && generic_files.is_empty() {
         return Err(CliError::NoSourceFiles(config.root));
     }
 
-    let result = crate::analyze(analyzer, &files, &config)?;
+    let result = crate::analyze_with_generic(analyzer, &ast_files, &generic_files, &config)?;
     let reporter = create_reporter(format, Some(root));
 
     Ok(AnalysisOutput {
@@ -285,18 +324,7 @@ pub fn cmd_report(
     reporter: &dyn Reporter,
     writer: &mut impl Write,
 ) -> CliResult {
-    reporter.report_stats(&result.stats, writer)?;
-    writeln!(writer)?;
-    reporter.report_exact(&result.exact_groups, writer)?;
-    if !result.near_groups.is_empty() {
-        reporter.report_near(&result.near_groups, writer)?;
-    }
-    if !result.sub_exact_groups.is_empty() {
-        reporter.report_sub_exact(&result.sub_exact_groups, writer)?;
-    }
-    if !result.sub_near_groups.is_empty() {
-        reporter.report_sub_near(&result.sub_near_groups, writer)?;
-    }
+    reporter.report_full(result, writer)?;
     Ok(())
 }
 
@@ -316,28 +344,34 @@ pub fn cmd_check(
     reporter.report_stats(&result.stats, writer)?;
 
     let mut failed = false;
+    let exact_group_count = result.stats.exact_duplicate_groups
+        + result.stats.sub_exact_groups
+        + result.stats.token_normalized_exact_groups
+        + result.stats.token_raw_exact_groups
+        + result.stats.line_exact_groups;
+    let near_group_count = result.stats.near_duplicate_groups
+        + result.stats.sub_near_groups
+        + result.stats.token_normalized_near_groups;
 
     if let Some(threshold) = max_exact
-        && result.stats.exact_duplicate_groups > threshold
+        && exact_group_count > threshold
     {
         writeln!(
             writer,
-            "\nCheck FAILED: {} exact duplicate groups (max: {})",
-            result.stats.exact_duplicate_groups, threshold
+            "\nCheck FAILED: {exact_group_count} exact duplicate groups (max: {threshold})"
         )?;
-        reporter.report_exact(&result.exact_groups, writer)?;
+        reporter.report_full(result, writer)?;
         failed = true;
     }
 
     if let Some(threshold) = max_near
-        && result.stats.near_duplicate_groups > threshold
+        && near_group_count > threshold
     {
         writeln!(
             writer,
-            "\nCheck FAILED: {} near duplicate groups (max: {})",
-            result.stats.near_duplicate_groups, threshold
+            "\nCheck FAILED: {near_group_count} near duplicate groups (max: {threshold})"
         )?;
-        reporter.report_near(&result.near_groups, writer)?;
+        reporter.report_full(result, writer)?;
         failed = true;
     }
 

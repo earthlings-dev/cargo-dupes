@@ -1,6 +1,9 @@
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+
+use crate::code_unit::DetectionDimension;
 
 /// The subset of configuration relevant to language-specific parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +39,14 @@ pub struct Config {
     pub sub_function: bool,
     /// Minimum number of AST nodes for a sub-function unit to be analyzed.
     pub min_sub_nodes: usize,
+    /// Enabled duplicate detection dimensions.
+    pub enabled_dimensions: BTreeSet<DetectionDimension>,
+    /// Minimum number of tokens in a token window.
+    pub token_min_tokens: usize,
+    /// Similarity threshold for normalized token near-duplicates.
+    pub token_similarity_threshold: f64,
+    /// Minimum number of lines in a line window.
+    pub line_min_lines: usize,
     /// Root path to analyze.
     pub root: PathBuf,
 }
@@ -52,8 +63,12 @@ impl Default for Config {
             max_near_percent: None,
             min_lines: 0,
             exclude_tests: false,
-            sub_function: false,
+            sub_function: true,
             min_sub_nodes: 5,
+            enabled_dimensions: DetectionDimension::all().iter().copied().collect(),
+            token_min_tokens: 50,
+            token_similarity_threshold: 0.9,
+            line_min_lines: 5,
             root: PathBuf::from("."),
         }
     }
@@ -74,6 +89,35 @@ struct FileConfig {
     exclude_tests: Option<bool>,
     sub_function: Option<bool>,
     min_sub_nodes: Option<usize>,
+    dimensions: Option<DimensionConfig>,
+    token: Option<TokenConfig>,
+    line: Option<LineConfig>,
+}
+
+/// Optional dimension switches from file config.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+struct DimensionConfig {
+    ast: Option<bool>,
+    sub_ast: Option<bool>,
+    token_normalized: Option<bool>,
+    token_raw: Option<bool>,
+    line: Option<bool>,
+}
+
+/// Optional token settings from file config.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+struct TokenConfig {
+    min_tokens: Option<usize>,
+    similarity_threshold: Option<f64>,
+}
+
+/// Optional line settings from file config.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+struct LineConfig {
+    min_lines: Option<usize>,
 }
 
 /// Cargo.toml metadata section.
@@ -174,6 +218,56 @@ impl Config {
         }
         if let Some(v) = fc.min_sub_nodes {
             self.min_sub_nodes = v;
+        }
+        if let Some(dimensions) = &fc.dimensions {
+            if let Some(v) = dimensions.ast {
+                self.set_dimension(DetectionDimension::Ast, v);
+            }
+            if let Some(v) = dimensions.sub_ast {
+                self.set_dimension(DetectionDimension::SubAst, v);
+            }
+            if let Some(v) = dimensions.token_normalized {
+                self.set_dimension(DetectionDimension::TokenNormalized, v);
+            }
+            if let Some(v) = dimensions.token_raw {
+                self.set_dimension(DetectionDimension::TokenRaw, v);
+            }
+            if let Some(v) = dimensions.line {
+                self.set_dimension(DetectionDimension::Line, v);
+            }
+        }
+        if let Some(token) = &fc.token {
+            if let Some(v) = token.min_tokens {
+                self.token_min_tokens = v;
+            }
+            if let Some(v) = token.similarity_threshold {
+                self.token_similarity_threshold = v;
+            }
+        }
+        if let Some(line) = &fc.line
+            && let Some(v) = line.min_lines
+        {
+            self.line_min_lines = v;
+        }
+    }
+
+    /// Disable a duplicate-detection dimension.
+    pub fn disable_dimension(&mut self, dimension: DetectionDimension) {
+        self.enabled_dimensions.remove(&dimension);
+    }
+
+    /// Return true when a duplicate-detection dimension is enabled.
+    #[must_use]
+    pub fn dimension_enabled(&self, dimension: DetectionDimension) -> bool {
+        self.enabled_dimensions.contains(&dimension)
+    }
+
+    /// Set a duplicate-detection dimension on or off.
+    fn set_dimension(&mut self, dimension: DetectionDimension, enabled: bool) {
+        if enabled {
+            self.enabled_dimensions.insert(dimension);
+        } else {
+            self.enabled_dimensions.remove(&dimension);
         }
     }
 }

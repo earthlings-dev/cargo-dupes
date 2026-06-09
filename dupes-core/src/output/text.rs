@@ -1,5 +1,6 @@
 use std::io;
 
+use crate::AnalysisResult;
 use crate::grouper::{DuplicateGroup, DuplicationStats};
 use crate::output::{Reporter, display_path};
 
@@ -94,6 +95,53 @@ impl TextReporter {
 }
 
 impl Reporter for TextReporter {
+    fn report_full(&self, result: &AnalysisResult, writer: &mut dyn io::Write) -> io::Result<()> {
+        self.report_stats(&result.stats, writer)?;
+        writeln!(writer)?;
+        self.report_exact(&result.exact_groups, writer)?;
+        if !result.near_groups.is_empty() {
+            self.report_near(&result.near_groups, writer)?;
+        }
+        if !result.sub_exact_groups.is_empty() {
+            self.report_sub_exact(&result.sub_exact_groups, writer)?;
+        }
+        if !result.sub_near_groups.is_empty() {
+            self.report_sub_near(&result.sub_near_groups, writer)?;
+        }
+        self.write_groups(
+            &result.token_normalized_exact_groups,
+            writer,
+            "Normalized Token Exact Duplicates",
+            None,
+            false,
+            false,
+        )?;
+        self.write_groups(
+            &result.token_normalized_near_groups,
+            writer,
+            "Normalized Token Near Duplicates",
+            None,
+            true,
+            false,
+        )?;
+        self.write_groups(
+            &result.token_raw_exact_groups,
+            writer,
+            "Raw Token Exact Duplicates",
+            None,
+            false,
+            false,
+        )?;
+        self.write_groups(
+            &result.line_exact_groups,
+            writer,
+            "Line Exact Duplicates",
+            None,
+            false,
+            false,
+        )
+    }
+
     fn report_stats(&self, stats: &DuplicationStats, writer: &mut dyn io::Write) -> io::Result<()> {
         writeln!(writer, "Duplication Statistics")?;
         writeln!(writer, "=====================")?;
@@ -142,6 +190,33 @@ impl Reporter for TextReporter {
                 writer,
                 "Sub-function near:  {} groups ({} units)",
                 stats.sub_near_groups, stats.sub_near_units
+            )?;
+        }
+        if stats.token_normalized_exact_groups > 0 || stats.token_normalized_near_groups > 0 {
+            writeln!(writer)?;
+            writeln!(
+                writer,
+                "Normalized token exact: {} groups ({} units)",
+                stats.token_normalized_exact_groups, stats.token_normalized_exact_units
+            )?;
+            writeln!(
+                writer,
+                "Normalized token near:  {} groups ({} units)",
+                stats.token_normalized_near_groups, stats.token_normalized_near_units
+            )?;
+        }
+        if stats.token_raw_exact_groups > 0 {
+            writeln!(
+                writer,
+                "Raw token exact:        {} groups ({} units)",
+                stats.token_raw_exact_groups, stats.token_raw_exact_units
+            )?;
+        }
+        if stats.line_exact_groups > 0 {
+            writeln!(
+                writer,
+                "Line exact:             {} groups ({} units)",
+                stats.line_exact_groups, stats.line_exact_units
             )?;
         }
         Ok(())
@@ -207,8 +282,9 @@ impl Reporter for TextReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::code_unit::{CodeUnit, CodeUnitKind};
+    use crate::code_unit::{CodeUnit, CodeUnitKind, DetectionDimension};
     use crate::fingerprint::Fingerprint;
+    use crate::grouper::MatchKind;
     use crate::node::{NodeKind, NormalizedNode};
     use std::path::PathBuf;
 
@@ -244,6 +320,7 @@ mod tests {
             sub_exact_units: 0,
             sub_near_groups: 0,
             sub_near_units: 0,
+            ..Default::default()
         };
         let mut buf = Vec::new();
         reporter.report_stats(&stats, &mut buf).unwrap();
@@ -266,6 +343,8 @@ mod tests {
     fn text_report_exact_with_groups() {
         let reporter = TextReporter::new(Some(PathBuf::from("/project")));
         let group = DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Exact,
             fingerprint: Fingerprint::from_node(&NormalizedNode::leaf(NodeKind::Opaque)),
             members: vec![
                 make_unit("foo", "/project/src/a.rs", 10, 20),
@@ -288,6 +367,8 @@ mod tests {
         let reporter = TextReporter::new(None);
         let fp = Fingerprint::from_node(&NormalizedNode::with_children(NodeKind::Block, vec![]));
         let group = DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Near,
             fingerprint: fp,
             members: vec![
                 make_unit("process", "/src/a.rs", 10, 25),

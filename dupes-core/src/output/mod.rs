@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::io;
 use std::path::Path;
 
+use crate::AnalysisResult;
 use crate::grouper::{DuplicateGroup, DuplicationStats};
 
 /// Compute a display path relative to an optional base, falling back to the absolute path.
@@ -20,6 +21,7 @@ pub fn display_path<'a>(base: Option<&Path>, path: &'a Path) -> Cow<'a, str> {
 
 /// Trait for reporting analysis results.
 pub trait Reporter {
+    fn report_full(&self, result: &AnalysisResult, writer: &mut dyn io::Write) -> io::Result<()>;
     fn report_stats(&self, stats: &DuplicationStats, writer: &mut dyn io::Write) -> io::Result<()>;
     fn report_exact(&self, groups: &[DuplicateGroup], writer: &mut dyn io::Write)
     -> io::Result<()>;

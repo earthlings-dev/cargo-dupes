@@ -1,12 +1,35 @@
 use std::collections::HashMap;
 
-use crate::code_unit::{CodeUnit, CodeUnitKind};
+use crate::code_unit::{CodeUnit, CodeUnitKind, DetectionDimension};
 use crate::fingerprint::Fingerprint;
 use crate::similarity;
+
+/// Whether a group was found by exact equality or similarity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchKind {
+    /// Every compared signature is exactly equal.
+    Exact,
+    /// Similarity score is at or above the configured threshold.
+    Near,
+}
+
+impl std::fmt::Display for MatchKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Exact => write!(f, "exact"),
+            Self::Near => write!(f, "near"),
+        }
+    }
+}
 
 /// A group of duplicate code units.
 #[derive(Debug, Clone)]
 pub struct DuplicateGroup {
+    /// Detection dimension that produced this group.
+    pub dimension: DetectionDimension,
+    /// Exact or near-duplicate match.
+    pub match_kind: MatchKind,
     /// Shared fingerprint for exact duplicates, or composite fingerprint
     /// (derived from sorted member fingerprints) for near-duplicate groups.
     pub fingerprint: Fingerprint,
@@ -17,7 +40,7 @@ pub struct DuplicateGroup {
 }
 
 /// Statistics about duplication in the analyzed codebase.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct DuplicationStats {
     pub total_code_units: usize,
     pub total_lines: usize,
@@ -32,6 +55,15 @@ pub struct DuplicationStats {
     pub sub_exact_units: usize,
     pub sub_near_groups: usize,
     pub sub_near_units: usize,
+    // Generic token / line stats
+    pub token_normalized_exact_groups: usize,
+    pub token_normalized_exact_units: usize,
+    pub token_normalized_near_groups: usize,
+    pub token_normalized_near_units: usize,
+    pub token_raw_exact_groups: usize,
+    pub token_raw_exact_units: usize,
+    pub line_exact_groups: usize,
+    pub line_exact_units: usize,
 }
 
 impl DuplicationStats {
@@ -59,6 +91,15 @@ impl DuplicationStats {
 /// Group code units by exact fingerprint match.
 #[must_use]
 pub fn group_exact_duplicates(units: &[CodeUnit]) -> Vec<DuplicateGroup> {
+    group_exact_duplicates_for(units, DetectionDimension::Ast)
+}
+
+/// Group code units by exact fingerprint match for a specific dimension.
+#[must_use]
+pub fn group_exact_duplicates_for(
+    units: &[CodeUnit],
+    dimension: DetectionDimension,
+) -> Vec<DuplicateGroup> {
     let mut groups: HashMap<Fingerprint, Vec<CodeUnit>> = HashMap::new();
 
     for unit in units {
@@ -72,7 +113,9 @@ pub fn group_exact_duplicates(units: &[CodeUnit]) -> Vec<DuplicateGroup> {
         .into_iter()
         .filter(|(_, members)| members.len() > 1)
         .map(|(fp, members)| DuplicateGroup {
-            fingerprint: fp,
+            dimension,
+            match_kind: MatchKind::Exact,
+            fingerprint: group_fingerprint(dimension, MatchKind::Exact, fp, &members),
             members,
             similarity: 1.0,
         })
@@ -96,6 +139,22 @@ pub fn find_near_duplicates(
     units: &[CodeUnit],
     threshold: f64,
     exact_fingerprints: &[Fingerprint],
+) -> Vec<DuplicateGroup> {
+    find_near_duplicates_for(
+        units,
+        threshold,
+        exact_fingerprints,
+        DetectionDimension::Ast,
+    )
+}
+
+/// Find near-duplicate groups above the similarity threshold for a dimension.
+#[must_use]
+pub fn find_near_duplicates_for(
+    units: &[CodeUnit],
+    threshold: f64,
+    exact_fingerprints: &[Fingerprint],
+    dimension: DetectionDimension,
 ) -> Vec<DuplicateGroup> {
     // Build set of fingerprints that are already exact duplicates
     let exact_set: std::collections::HashSet<Fingerprint> =
@@ -193,7 +252,9 @@ pub fn find_near_duplicates(
             let composite_fp = Fingerprint::from_fingerprints(&member_fps);
 
             DuplicateGroup {
-                fingerprint: composite_fp,
+                dimension,
+                match_kind: MatchKind::Near,
+                fingerprint: group_fingerprint(dimension, MatchKind::Near, composite_fp, &members),
                 members,
                 similarity: if min_score.is_infinite() {
                     threshold
@@ -217,6 +278,30 @@ pub fn find_near_duplicates(
     });
 
     result
+}
+
+/// Build a stable group fingerprint tied to dimension, match kind, and locations.
+fn group_fingerprint(
+    dimension: DetectionDimension,
+    match_kind: MatchKind,
+    content_fingerprint: Fingerprint,
+    members: &[CodeUnit],
+) -> Fingerprint {
+    let mut locations: Vec<String> = members
+        .iter()
+        .map(|member| {
+            format!(
+                "{}:{}-{}",
+                member.file.display(),
+                member.line_start,
+                member.line_end
+            )
+        })
+        .collect();
+    locations.sort();
+    Fingerprint::from_bytes(
+        format!("{dimension}:{match_kind}:{content_fingerprint}:{locations:?}").as_bytes(),
+    )
 }
 
 /// Compute the total number of source lines in a duplicate group.
@@ -252,6 +337,14 @@ pub fn compute_stats(
         sub_exact_units: 0,
         sub_near_groups: 0,
         sub_near_units: 0,
+        token_normalized_exact_groups: 0,
+        token_normalized_exact_units: 0,
+        token_normalized_near_groups: 0,
+        token_normalized_near_units: 0,
+        token_raw_exact_groups: 0,
+        token_raw_exact_units: 0,
+        line_exact_groups: 0,
+        line_exact_units: 0,
     }
 }
 
@@ -269,6 +362,32 @@ pub fn compute_stats_with_sub(
     stats.sub_exact_units = sub_exact_groups.iter().map(|g| g.members.len()).sum();
     stats.sub_near_groups = sub_near_groups.len();
     stats.sub_near_units = sub_near_groups.iter().map(|g| g.members.len()).sum();
+    stats
+}
+
+/// Add generic token and line group counts to existing stats.
+#[must_use]
+pub fn with_generic_stats(
+    mut stats: DuplicationStats,
+    token_normalized_exact_groups: &[DuplicateGroup],
+    token_normalized_near_groups: &[DuplicateGroup],
+    token_raw_exact_groups: &[DuplicateGroup],
+    line_exact_groups: &[DuplicateGroup],
+) -> DuplicationStats {
+    stats.token_normalized_exact_groups = token_normalized_exact_groups.len();
+    stats.token_normalized_exact_units = token_normalized_exact_groups
+        .iter()
+        .map(|g| g.members.len())
+        .sum();
+    stats.token_normalized_near_groups = token_normalized_near_groups.len();
+    stats.token_normalized_near_units = token_normalized_near_groups
+        .iter()
+        .map(|g| g.members.len())
+        .sum();
+    stats.token_raw_exact_groups = token_raw_exact_groups.len();
+    stats.token_raw_exact_units = token_raw_exact_groups.iter().map(|g| g.members.len()).sum();
+    stats.line_exact_groups = line_exact_groups.len();
+    stats.line_exact_units = line_exact_groups.iter().map(|g| g.members.len()).sum();
     stats
 }
 
@@ -314,6 +433,7 @@ mod tests {
             sub_exact_units: 0,
             sub_near_groups: 0,
             sub_near_units: 0,
+            ..Default::default()
         };
         assert!((stats.exact_duplicate_percent() - 25.0).abs() < f64::EPSILON);
         assert!((stats.near_duplicate_percent() - 15.0).abs() < f64::EPSILON);
@@ -334,6 +454,7 @@ mod tests {
             sub_exact_units: 0,
             sub_near_groups: 0,
             sub_near_units: 0,
+            ..Default::default()
         };
         assert!((stats.exact_duplicate_percent() - 0.0).abs() < f64::EPSILON);
         assert!((stats.near_duplicate_percent() - 0.0).abs() < f64::EPSILON);

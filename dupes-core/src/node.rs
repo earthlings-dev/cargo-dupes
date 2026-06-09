@@ -176,6 +176,9 @@ pub enum NodeKind {
         name: String,
     },
 
+    // Generic token / line duplicate detection
+    Token(String),
+
     // Opaque — unsupported constructs
     Opaque,
 
@@ -296,10 +299,10 @@ fn collect_placeholder_order(
     match &node.kind {
         NodeKind::Placeholder(kind, idx)
         | NodeKind::PatPlaceholder(kind, idx)
-        | NodeKind::TypePlaceholder(kind, idx) => {
-            if seen.insert((*kind, *idx)) {
-                order.push((*kind, *idx));
-            }
+        | NodeKind::TypePlaceholder(kind, idx)
+            if seen.insert((*kind, *idx)) =>
+        {
+            order.push((*kind, *idx));
         }
         _ => {}
     }

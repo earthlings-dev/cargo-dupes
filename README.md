@@ -1,17 +1,28 @@
 # cargo-dupes
 
 A cargo subcommand that detects duplicate and near-duplicate code blocks in Rust codebases.
+The workspace also ships `code-dupes`, a multi-language CLI that combines
+language-aware AST analysis with generic token and line duplicate detection for
+code and text files.
 
 ## How It Works
 
-`cargo-dupes` parses Rust source files into ASTs using [syn](https://github.com/dtolnay/syn), then normalizes each function, method, and closure into a canonical form where:
+`cargo-dupes` parses Rust source files into ASTs using [syn](https://github.com/dtolnay/syn), then normalizes each function, method, closure, and nested control-flow region into a canonical form where:
 
 - **Identifiers are replaced** with positional placeholders (so `foo(x)` and `bar(y)` are identical)
 - **Literal values are erased** but types preserved (`42` and `99` are both "integer literal")
 - **Control flow structure is preserved** exactly
 - **Macro invocations become opaque** nodes
 
-This normalized AST is hashed into a fingerprint for exact duplicate detection, and compared tree-by-tree using the Dice coefficient for near-duplicate detection.
+This normalized AST is hashed with deterministic `blake3`-based fingerprints for exact duplicate detection, and compared tree-by-tree using the Dice coefficient for near-duplicate detection. The same pipeline also runs generic token and line-window detection so macro-heavy, config-like, prose, and non-AST-friendly duplication can be found without a separate tool.
+
+Detection dimensions:
+
+- **AST** — whole functions, methods, trait impl methods, and closures.
+- **Sub-AST** — nested `if` branches, `match` arms, loop bodies, closure bodies, and significant blocks. This is enabled by default.
+- **Normalized tokens** — identifier/literal-insensitive token windows.
+- **Raw tokens** — whitespace-insensitive exact token windows.
+- **Lines** — trimmed, whitespace-normalized line windows.
 
 ## Installation
 
@@ -47,10 +58,17 @@ Options:
   -p, --path <PATH>            Path to analyze (defaults to current directory)
       --min-nodes <MIN_NODES>  Minimum AST node count for analysis [default: 10]
       --min-lines <MIN_LINES>  Minimum source line count for analysis [default: 0 (disabled)]
-      --threshold <THRESHOLD>  Similarity threshold for near-duplicates (0.0-1.0) [default: 0.8]
+      --threshold <THRESHOLD>  Similarity threshold for near-duplicates (0.0-1.0) [default: 0.9]
       --format <FORMAT>        Output format [default: text] [possible values: text, json]
       --exclude <EXCLUDE>      Exclude patterns (can be repeated)
       --exclude-tests          Exclude test code (#[test] functions and #[cfg(test)] modules)
+  -s, --sub-function           Enable sub-function duplicate detection (enabled by default)
+      --no-sub-function        Disable sub-function duplicate detection
+      --min-sub-nodes <N>      Minimum AST node count for sub-function units [default: 5]
+      --disable-dimension <D>  Disable a dimension: ast, sub-ast, token-normalized, token-raw, line
+      --token-min-tokens <N>   Minimum token count for token windows [default: 50]
+      --token-threshold <T>    Similarity threshold for normalized token near-duplicates [default: 0.9]
+      --line-min-lines <N>     Minimum line count for line windows [default: 5]
 ```
 
 ### Examples
@@ -112,6 +130,27 @@ $ cargo dupes --format json stats
 }
 ```
 
+`report --format json` emits one parseable JSON object:
+
+```json
+{
+  "stats": {
+    "total_code_units": 4,
+    "exact_duplicate_groups": 1
+  },
+  "groups": [
+    {
+      "dimension": "ast",
+      "match_kind": "exact",
+      "fingerprint": "2a182da9e04e9428",
+      "similarity": 1.0,
+      "members": []
+    }
+  ],
+  "warnings": []
+}
+```
+
 **CI check (fail if any exact duplicates exist):**
 
 ```sh
@@ -151,6 +190,13 @@ $ cargo dupes --min-lines 10 report
 $ cargo dupes --threshold 0.7 report
 ```
 
+**Disable a noisy dimension temporarily:**
+
+```sh
+$ cargo dupes --disable-dimension line report
+$ cargo dupes --no-sub-function report
+```
+
 ## Configuration
 
 Configuration can be provided in three ways (in order of precedence):
@@ -171,6 +217,22 @@ max_exact_duplicates = 0
 max_near_duplicates = 10
 max_exact_percent = 5.0
 max_near_percent = 10.0
+sub_function = true
+min_sub_nodes = 5
+
+[dimensions]
+ast = true
+sub_ast = true
+token_normalized = true
+token_raw = true
+line = true
+
+[token]
+min_tokens = 50
+similarity_threshold = 0.9
+
+[line]
+min_lines = 5
 ```
 
 ### `Cargo.toml`
@@ -188,9 +250,19 @@ exclude = ["tests"]
 |--------|---------|-------------|
 | `min_nodes` | `10` | Minimum AST node count for a code unit to be analyzed. Increase to skip trivial functions. |
 | `min_lines` | `0` | Minimum source line count for a code unit to be analyzed. `0` means disabled. |
-| `similarity_threshold` | `0.8` | Minimum similarity score (0.0-1.0) for near-duplicate detection. |
-| `exclude` | `[]` | Path patterns to exclude from scanning (substring match). |
+| `similarity_threshold` | `0.9` | Minimum similarity score (0.0-1.0) for near-duplicate detection. |
+| `exclude` | `[]` | Glob-like path patterns to exclude from scanning. |
 | `exclude_tests` | `false` | Exclude `#[test]` functions and `#[cfg(test)]` modules from analysis. |
+| `sub_function` | `true` | Enable nested sub-function duplicate detection. |
+| `min_sub_nodes` | `5` | Minimum AST node count for sub-function units. |
+| `[dimensions].ast` | `true` | Enable whole-unit AST duplicate detection. |
+| `[dimensions].sub_ast` | `true` | Enable nested AST duplicate detection. |
+| `[dimensions].token_normalized` | `true` | Enable normalized token-window duplicate detection. |
+| `[dimensions].token_raw` | `true` | Enable raw token-window exact duplicate detection. |
+| `[dimensions].line` | `true` | Enable normalized line-window exact duplicate detection. |
+| `[token].min_tokens` | `50` | Minimum token count for token windows. |
+| `[token].similarity_threshold` | `0.9` | Minimum score for normalized token near-duplicates. |
+| `[line].min_lines` | `5` | Minimum line count for line windows. |
 | `max_exact_duplicates` | `None` | For `check` subcommand: maximum allowed exact duplicate groups. |
 | `max_near_duplicates` | `None` | For `check` subcommand: maximum allowed near-duplicate groups. |
 | `max_exact_percent` | `None` | For `check` subcommand: maximum allowed exact duplicate line percentage. |
@@ -240,11 +312,15 @@ Exit codes:
 | **Methods** | `fn` items inside `impl` blocks |
 | **Trait impls** | `fn` items inside `impl Trait for Type` blocks |
 | **Closures** | Closure expressions (above the min node threshold) |
+| **Sub-functions** | `if` branches, `match` arms, loop bodies, closure bodies, and nested blocks |
+| **Token windows** | Normalized and raw token windows in scanned code/text files |
+| **Line windows** | Normalized line windows in scanned code/text files |
 
 The scanner automatically:
 - Skips `target/` directories
+- Respects `.gitignore` / parent ignore files
 - Skips hidden directories (starting with `.`)
-- Respects exclude patterns
+- Respects glob-like exclude patterns
 - Handles parse errors gracefully (skips unparseable files with a warning)
 
 ## Development
@@ -253,7 +329,7 @@ The scanner automatically:
 
 ```sh
 cargo build          # Build
-cargo test           # Run all 147 tests
+cargo test           # Run all workspace tests
 cargo clippy         # Lint check
 cargo fmt --check    # Format check
 ```

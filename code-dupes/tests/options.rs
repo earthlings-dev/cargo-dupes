@@ -41,6 +41,12 @@ fn exclude_option() {
             fixture_path("exact_dupes").to_str().unwrap(),
             "--exclude",
             "lib.rs",
+            "--disable-dimension",
+            "token-normalized",
+            "--disable-dimension",
+            "token-raw",
+            "--disable-dimension",
+            "line",
             "stats",
         ])
         .assert()

@@ -45,13 +45,28 @@ fn error_on_empty_directory() {
 #[test]
 fn error_on_directory_with_unknown_files_only() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("readme.txt"), "hello").unwrap();
     std::fs::write(tmp.path().join("data.csv"), "a,b,c").unwrap();
+    std::fs::write(tmp.path().join("blob.dat"), "hello").unwrap();
     code_dupes()
         .args(["--path", tmp.path().to_str().unwrap(), "stats"])
         .assert()
         .code(2)
         .stderr(predicate::str::contains("No recognized source files"));
+}
+
+#[test]
+fn auto_detects_generic_text_duplicates() {
+    code_dupes()
+        .args([
+            "--path",
+            code_dupes_fixture_path("text_dupes").to_str().unwrap(),
+            "--line-min-lines",
+            "5",
+            "report",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Line Exact Duplicates"));
 }
 
 #[test]

@@ -79,6 +79,7 @@ fn without_sub_function_flag_no_sub_sections() {
         .args([
             "--path",
             fixture_path("sub_function_dupes").to_str().unwrap(),
+            "--no-sub-function",
             "report",
         ])
         .assert()
@@ -93,6 +94,7 @@ fn without_sub_function_json_no_sub_fields() {
         .args([
             "--path",
             fixture_path("sub_function_dupes").to_str().unwrap(),
+            "--no-sub-function",
             "--format",
             "json",
             "stats",

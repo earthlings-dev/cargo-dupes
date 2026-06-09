@@ -341,7 +341,10 @@ fn near_duplicates_found() {
         "#,
     );
     let exact = dupes_core::grouper::group_exact_duplicates(&units);
-    let exact_fps: Vec<_> = exact.iter().map(|g| g.fingerprint).collect();
+    let exact_fps: Vec<_> = exact
+        .iter()
+        .flat_map(|g| g.members.iter().map(|member| member.fingerprint))
+        .collect();
     let near = dupes_core::grouper::find_near_duplicates(&units, 0.7, &exact_fps);
     assert!(exact.len() + near.len() >= 1);
 }
@@ -395,7 +398,10 @@ fn near_duplicates_exclude_exact() {
         "#,
     );
     let exact = dupes_core::grouper::group_exact_duplicates(&units);
-    let exact_fps: Vec<_> = exact.iter().map(|g| g.fingerprint).collect();
+    let exact_fps: Vec<_> = exact
+        .iter()
+        .flat_map(|g| g.members.iter().map(|member| member.fingerprint))
+        .collect();
     let near = dupes_core::grouper::find_near_duplicates(&units, 0.7, &exact_fps);
     assert!(near.is_empty());
 }
@@ -425,6 +431,8 @@ fn stats_with_near_duplicates() {
         &NormalizedNode::leaf(NodeKind::Opaque),
     )]);
     let near_group = dupes_core::grouper::DuplicateGroup {
+        dimension: dupes_core::code_unit::DetectionDimension::Ast,
+        match_kind: dupes_core::grouper::MatchKind::Near,
         fingerprint: composite_fp,
         members: vec![],
         similarity: 0.85,

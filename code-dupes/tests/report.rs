@@ -131,15 +131,15 @@ fn json_format_report() {
         .stdout
         .clone();
     let text = String::from_utf8(output).unwrap();
-    // JSON report outputs stats object then groups array, separated by newlines
-    let parts: Vec<&str> = text.splitn(2, "\n\n").collect();
-    assert!(parts.len() >= 2, "expected stats + groups sections");
-    let stats: serde_json::Value = serde_json::from_str(parts[0]).unwrap();
+    let report: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let stats = &report["stats"];
     assert!(stats["total_code_units"].as_u64().unwrap() > 0);
     assert!(stats["exact_duplicate_groups"].as_u64().unwrap() > 0);
-    let groups: serde_json::Value = serde_json::from_str(parts[1]).unwrap();
+    let groups = &report["groups"];
     assert!(groups.as_array().unwrap().len() > 0);
     assert!(groups[0]["fingerprint"].is_string());
+    assert!(groups[0]["dimension"].is_string());
+    assert!(groups[0]["match_kind"].is_string());
     assert!(groups[0]["members"].is_array());
 }
 

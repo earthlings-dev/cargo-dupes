@@ -1,5 +1,6 @@
 use std::io;
 
+use crate::AnalysisResult;
 use crate::grouper::{DuplicateGroup, DuplicationStats};
 use crate::output::{Reporter, display_path};
 
@@ -34,6 +35,22 @@ struct JsonStats {
     sub_near_groups: usize,
     #[serde(skip_serializing_if = "is_zero")]
     sub_near_units: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    token_normalized_exact_groups: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    token_normalized_exact_units: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    token_normalized_near_groups: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    token_normalized_near_units: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    token_raw_exact_groups: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    token_raw_exact_units: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    line_exact_groups: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    line_exact_units: usize,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T
@@ -43,6 +60,8 @@ const fn is_zero(v: &usize) -> bool {
 
 #[derive(serde::Serialize)]
 struct JsonGroup {
+    dimension: String,
+    match_kind: String,
     fingerprint: String,
     similarity: f64,
     members: Vec<JsonMember>,
@@ -57,24 +76,29 @@ struct JsonMember {
     line_end: usize,
 }
 
+#[derive(serde::Serialize)]
+struct JsonReport {
+    stats: JsonStats,
+    groups: Vec<JsonGroup>,
+    warnings: Vec<String>,
+}
+
 impl Reporter for JsonReporter {
-    fn report_stats(&self, stats: &DuplicationStats, writer: &mut dyn io::Write) -> io::Result<()> {
-        let json_stats = JsonStats {
-            total_code_units: stats.total_code_units,
-            total_lines: stats.total_lines,
-            exact_duplicate_groups: stats.exact_duplicate_groups,
-            exact_duplicate_units: stats.exact_duplicate_units,
-            near_duplicate_groups: stats.near_duplicate_groups,
-            near_duplicate_units: stats.near_duplicate_units,
-            exact_duplicate_lines: stats.exact_duplicate_lines,
-            near_duplicate_lines: stats.near_duplicate_lines,
-            exact_duplicate_percent: stats.exact_duplicate_percent(),
-            near_duplicate_percent: stats.near_duplicate_percent(),
-            sub_exact_groups: stats.sub_exact_groups,
-            sub_exact_units: stats.sub_exact_units,
-            sub_near_groups: stats.sub_near_groups,
-            sub_near_units: stats.sub_near_units,
+    fn report_full(&self, result: &AnalysisResult, writer: &mut dyn io::Write) -> io::Result<()> {
+        let report = JsonReport {
+            stats: Self::to_json_stats(&result.stats),
+            groups: result
+                .groups()
+                .map(|group| self.to_json_group(group))
+                .collect(),
+            warnings: result.warnings.clone(),
         };
+        let json = serde_json::to_string_pretty(&report).map_err(io::Error::other)?;
+        writeln!(writer, "{json}")
+    }
+
+    fn report_stats(&self, stats: &DuplicationStats, writer: &mut dyn io::Write) -> io::Result<()> {
+        let json_stats = Self::to_json_stats(stats);
         let json = serde_json::to_string_pretty(&json_stats).map_err(io::Error::other)?;
         writeln!(writer, "{json}")
     }
@@ -109,6 +133,33 @@ impl Reporter for JsonReporter {
 }
 
 impl JsonReporter {
+    fn to_json_stats(stats: &DuplicationStats) -> JsonStats {
+        JsonStats {
+            total_code_units: stats.total_code_units,
+            total_lines: stats.total_lines,
+            exact_duplicate_groups: stats.exact_duplicate_groups,
+            exact_duplicate_units: stats.exact_duplicate_units,
+            near_duplicate_groups: stats.near_duplicate_groups,
+            near_duplicate_units: stats.near_duplicate_units,
+            exact_duplicate_lines: stats.exact_duplicate_lines,
+            near_duplicate_lines: stats.near_duplicate_lines,
+            exact_duplicate_percent: stats.exact_duplicate_percent(),
+            near_duplicate_percent: stats.near_duplicate_percent(),
+            sub_exact_groups: stats.sub_exact_groups,
+            sub_exact_units: stats.sub_exact_units,
+            sub_near_groups: stats.sub_near_groups,
+            sub_near_units: stats.sub_near_units,
+            token_normalized_exact_groups: stats.token_normalized_exact_groups,
+            token_normalized_exact_units: stats.token_normalized_exact_units,
+            token_normalized_near_groups: stats.token_normalized_near_groups,
+            token_normalized_near_units: stats.token_normalized_near_units,
+            token_raw_exact_groups: stats.token_raw_exact_groups,
+            token_raw_exact_units: stats.token_raw_exact_units,
+            line_exact_groups: stats.line_exact_groups,
+            line_exact_units: stats.line_exact_units,
+        }
+    }
+
     fn write_groups(
         &self,
         groups: &[DuplicateGroup],
@@ -121,6 +172,8 @@ impl JsonReporter {
 
     fn to_json_group(&self, group: &DuplicateGroup) -> JsonGroup {
         JsonGroup {
+            dimension: group.dimension.to_string(),
+            match_kind: group.match_kind.to_string(),
             fingerprint: group.fingerprint.to_hex(),
             similarity: group.similarity,
             members: group
@@ -141,8 +194,9 @@ impl JsonReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::code_unit::{CodeUnit, CodeUnitKind};
+    use crate::code_unit::{CodeUnit, CodeUnitKind, DetectionDimension};
     use crate::fingerprint::Fingerprint;
+    use crate::grouper::MatchKind;
     use crate::node::{NodeKind, NormalizedNode};
     use std::path::PathBuf;
 
@@ -178,6 +232,7 @@ mod tests {
             sub_exact_units: 0,
             sub_near_groups: 0,
             sub_near_units: 0,
+            ..Default::default()
         };
         let mut buf = Vec::new();
         reporter.report_stats(&stats, &mut buf).unwrap();
@@ -201,6 +256,8 @@ mod tests {
     fn json_report_exact_with_groups() {
         let reporter = JsonReporter::new(Some(PathBuf::from("/project")));
         let group = DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Exact,
             fingerprint: Fingerprint::from_node(&NormalizedNode::leaf(NodeKind::Opaque)),
             members: vec![
                 make_unit("foo", "/project/src/a.rs", 10, 20),
@@ -224,6 +281,8 @@ mod tests {
         let reporter = JsonReporter::new(None);
         let fp = Fingerprint::from_node(&NormalizedNode::with_children(NodeKind::Block, vec![]));
         let group = DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Near,
             fingerprint: fp,
             members: vec![
                 make_unit("process", "/src/a.rs", 10, 25),
@@ -245,6 +304,8 @@ mod tests {
     fn json_is_valid() {
         let reporter = JsonReporter::new(Some(PathBuf::from("/project")));
         let group = DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Exact,
             fingerprint: Fingerprint::from_node(&NormalizedNode::leaf(NodeKind::Opaque)),
             members: vec![make_unit("foo", "/project/src/a.rs", 10, 20)],
             similarity: 1.0,
@@ -261,6 +322,8 @@ mod tests {
         let reporter = JsonReporter::new(Some(PathBuf::from("/home/user/project")));
         let fp = Fingerprint::from_node(&NormalizedNode::with_children(NodeKind::Block, vec![]));
         let group = DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Near,
             fingerprint: fp,
             members: vec![make_unit("foo", "/home/user/project/src/main.rs", 1, 10)],
             similarity: 0.9,

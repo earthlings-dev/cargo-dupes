@@ -139,6 +139,8 @@ pub fn remove_stale_entries(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::code_unit::DetectionDimension;
+    use crate::grouper::MatchKind;
     use crate::node::{LiteralKind, NodeKind, NormalizedNode};
     use tempfile::TempDir;
 
@@ -213,11 +215,15 @@ mod tests {
 
         let groups = vec![
             DuplicateGroup {
+                dimension: DetectionDimension::Ast,
+                match_kind: MatchKind::Exact,
                 fingerprint: fp,
                 members: vec![],
                 similarity: 1.0,
             },
             DuplicateGroup {
+                dimension: DetectionDimension::Ast,
+                match_kind: MatchKind::Exact,
                 fingerprint: Fingerprint::from_node(&NormalizedNode::leaf(NodeKind::Opaque)),
                 members: vec![],
                 similarity: 1.0,
@@ -235,6 +241,8 @@ mod tests {
         add_ignore(&mut ignore, &fp, None, vec![]);
 
         let groups = vec![DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Near,
             fingerprint: fp,
             members: vec![],
             similarity: 0.85,
@@ -253,6 +261,8 @@ mod tests {
         add_ignore(&mut ignore, &other_fp, None, vec![]);
 
         let groups = vec![DuplicateGroup {
+            dimension: DetectionDimension::Ast,
+            match_kind: MatchKind::Near,
             fingerprint: fp,
             members: vec![],
             similarity: 0.85,

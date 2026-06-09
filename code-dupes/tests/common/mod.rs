@@ -7,6 +7,7 @@ pub fn fixture_path(name: &str) -> PathBuf {
         .join(name)
 }
 
+#[allow(dead_code)]
 pub fn code_dupes_fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-`cargo-dupes` / `code-dupes` detects duplicate and near-duplicate code blocks across multiple languages. It works by normalizing AST into a custom representation where identifiers are replaced with positional placeholders and literal values are erased, then uses fingerprinting (hashing) for exact duplicate detection and Dice coefficient tree comparison for near-duplicate detection.
+`cargo-dupes` / `code-dupes` detects duplicate and near-duplicate code blocks across multiple languages. It works by normalizing AST into a custom representation where identifiers are replaced with positional placeholders and literal values are erased, then uses deterministic fingerprinting for exact duplicate detection and Dice coefficient tree comparison for near-duplicate detection. Generic token and line-window detection run alongside AST analysis so code/text duplication that does not fit a language AST is still visible.
 
 **Edition:** 2024 (Rust 1.93+). Uses let chains natively.
 
@@ -17,7 +17,7 @@ dupes-core/                       # Language-agnostic core library (no syn depen
     lib.rs                        # pub mod declarations, AnalysisResult, analyze(), analyze_units()
     analyzer.rs                   # LanguageAnalyzer trait
     node.rs                       # NormalizedNode enum (~30 variants), NormalizationContext, count_nodes, reindex
-    fingerprint.rs                # Fingerprint (u64 hash wrapper, hex serialization)
+    fingerprint.rs                # Fingerprint (u64 blake3 prefix wrapper, hex serialization)
     similarity.rs                 # Dice coefficient tree comparison
     grouper.rs                    # Exact grouping (HashMap) + near-duplicate (union-find)
     extractor.rs                  # Sub-function duplicate extraction
@@ -25,7 +25,8 @@ dupes-core/                       # Language-agnostic core library (no syn depen
     config.rs                     # Config + AnalysisConfig, loading from dupes.toml / Cargo.toml metadata
     cli.rs                        # Shared CLI types (CliError, Command, CliOverrides, run_analysis)
     ignore.rs                     # .dupes-ignore.toml management
-    scanner.rs                    # File discovery via walkdir (configurable extensions)
+    scanner.rs                    # Gitignore-aware file discovery with glob excludes
+    text_units.rs                 # Generic token / line-window duplicate units
     error.rs                      # Error types via thiserror
     output/
       mod.rs                      # Reporter trait
@@ -71,14 +72,14 @@ code-dupes/                       # Multi-language CLI (depends on dupes-rust + 
 
 ```sh
 cargo build                       # Build all workspace members
-cargo test                        # Run all ~361 tests
-cargo test -p dupes-core          # 69 core unit tests
+cargo test                        # Run all workspace tests
+cargo test -p dupes-core          # Core unit tests
 cargo test -p dupes-treesitter    # 45 tree-sitter tests (28 unit + 17 integration)
 cargo test -p dupes-python        # 51 Python analyzer tests (39 integration + 9 core pipeline + 3 unit)
 cargo test -p dupes-rust --lib    # 64 normalizer + parser + RustAnalyzer unit tests
 cargo test -p dupes-rust --test core_with_syn_tests  # 45 syn-dependent core tests
-cargo test -p cargo-dupes --tests # 35 cargo-dupes CLI integration tests
-cargo test -p code-dupes --tests  # 52 code-dupes CLI integration tests
+cargo test -p cargo-dupes --tests # cargo-dupes CLI integration tests
+cargo test -p code-dupes --tests  # code-dupes CLI integration tests
 cargo clippy --workspace          # Lint (must be clean)
 cargo fmt --all --check           # Format check
 ```
@@ -102,7 +103,8 @@ scan_files → analyze(analyzer, files, config) → AnalysisResult
                └── analyze_units()
                      ├── group_exact_duplicates
                      ├── find_near_duplicates
-                     ├── extract_sub_units (sub-function detection)
+                     ├── extract_sub_units / analyzer sub-units (sub-function detection)
+                     ├── generic token / line-window units
                      ├── filter_ignored
                      └── compute_stats
 ```
@@ -113,12 +115,13 @@ scan_files → analyze(analyzer, files, config) → AnalysisResult
 |--------|------|---------------|
 | **analyzer** | `dupes-core/src/analyzer.rs` | `LanguageAnalyzer` trait (`Send + Sync`): `file_extensions()`, `parse_file()`, `is_test_code()`. Analyzers tag test code via `CodeUnit::is_test`; `analyze()` filters. |
 | **node** | `dupes-core/src/node.rs` | `NormalizedNode` enum (~30 variants), `LiteralKind` (incl. `Null`), `BinOpKind` (incl. augmented assignments), `UnOpKind`, `NodeKind` (incl. `Yield`), `NormalizationContext`, `count_nodes()`, `reindex_placeholders()`. |
-| **fingerprint** | `dupes-core/src/fingerprint.rs` | `Fingerprint` struct wrapping `u64` from `DefaultHasher`. Supports hex serialization. |
+| **fingerprint** | `dupes-core/src/fingerprint.rs` | `Fingerprint` struct wrapping a deterministic 64-bit `blake3` prefix. Supports hex serialization. |
 | **code_unit** | `dupes-core/src/code_unit.rs` | `CodeUnit` struct (with `is_test` field) and `CodeUnitKind` enum (data types only, no parsing logic). |
 | **similarity** | `dupes-core/src/similarity.rs` | Recursive tree comparison using Dice coefficient: `score = (2 * matching) / (nodes_a + nodes_b)`. |
 | **grouper** | `dupes-core/src/grouper.rs` | Exact duplicate grouping via `HashMap<Fingerprint, Vec<CodeUnit>>`. Near-duplicate detection with size-bucket pre-filtering and union-find for transitive closure. |
 | **extractor** | `dupes-core/src/extractor.rs` | Sub-function duplicate detection: extracts inner blocks from `CodeUnit` bodies. |
-| **scanner** | `dupes-core/src/scanner.rs` | File discovery via `walkdir`. Skips `target/` and hidden directories. Respects exclude patterns. Configurable file extensions. |
+| **scanner** | `dupes-core/src/scanner.rs` | Gitignore-aware file discovery. Skips `target` and hidden directories. Respects glob-style exclude patterns. Configurable file extensions. |
+| **text_units** | `dupes-core/src/text_units.rs` | Generic normalized-token, raw-token, and line-window unit extraction. |
 | **config** | `dupes-core/src/config.rs` | `Config` loading: `dupes.toml` > `Cargo.toml [package.metadata.dupes]` > defaults. `AnalysisConfig` (min_nodes, min_lines) for parsing-relevant subset. CLI overrides applied on top. |
 | **cli** | `dupes-core/src/cli.rs` | Shared CLI types: `CliError` (incl. `AmbiguousLanguage`), `Command`, `CliOverrides`, `OutputFormat`, `run_analysis()`, command implementations (`cmd_report`, `cmd_check`, etc.). |
 | **ignore** | `dupes-core/src/ignore.rs` | TOML-based ignore file (`.dupes-ignore.toml`). Add/remove/filter by fingerprint. Stale entry cleanup. |
@@ -168,7 +171,7 @@ The `NormalizedNode` enum provides a language-agnostic normalized AST:
 - Preserves control flow structure exactly (if/match/loop/for)
 - Maps language-specific constructs to shared `NodeKind` variants
 
-This enables `derive(Hash)` for fingerprinting and recursive tree comparison for similarity scoring.
+This enables deterministic debug-form fingerprinting and recursive tree comparison for similarity scoring.
 
 Two normalization backends exist:
 - **syn-based** (dupes-rust): Direct Rust AST → `NormalizedNode` via syn's visitor pattern
@@ -178,8 +181,8 @@ Two normalization backends exist:
 
 - `LanguageAnalyzer` — Trait for language-specific parsing. Provides `file_extensions()`, `parse_file()`, `is_test_code()`.
 - `AnalysisConfig` — Parsing-relevant config subset: `min_nodes`, `min_lines`.
-- `CodeUnit` — A function, method, closure, class, or impl block extracted from source. Contains normalized signature + body, fingerprint, file location, line numbers, `is_test` flag.
-- `DuplicateGroup` — A group of code units with the same fingerprint (exact) or above the similarity threshold (near). `fingerprint` is always set (non-optional).
+- `CodeUnit` — A function, method, closure, class, impl block, token window, or line window extracted from source. Contains normalized signature + body, fingerprint, file location, line numbers, `is_test` flag.
+- `DuplicateGroup` — A group of code units with the same fingerprint (exact) or above the similarity threshold (near). Carries `dimension`, `match_kind`, and a stable group fingerprint.
 - `DuplicationStats` — Statistics including group/unit counts, duplicated line counts (exact and near), total lines, and percentage helpers.
 - `Config` — All analysis parameters (min_nodes, min_lines, similarity_threshold, excludes, exclude_tests, CI thresholds including percentage-based).
 - `KindResolver` — Type alias `Box<dyn Fn(&str) -> CodeUnitKind + Send + Sync>` for resolving code unit kind from tree-sitter node kind strings.
@@ -200,13 +203,13 @@ Both `cargo-dupes` (Rust only) and `code-dupes` (multi-language) share the same 
 
 ## Testing
 
-- **dupes-core unit tests** (69) — Colocated in each module (`#[cfg(test)] mod tests`). No syn dependency.
+- **dupes-core unit tests** — Colocated in each module (`#[cfg(test)] mod tests`). No syn dependency.
 - **dupes-treesitter tests** (45) — 28 unit tests + 17 integration tests (Python normalization).
 - **dupes-python tests** (51) — 39 integration tests + 9 core pipeline tests + 3 unit tests.
 - **dupes-rust unit tests** (64) — Colocated in `normalizer.rs`, `parser.rs`, and `lib.rs`. Use `syn::parse_str` to construct test data.
 - **syn-dependent core tests** (45) — In `dupes-rust/tests/core_with_syn_tests.rs`. Tests for grouper, extractor, similarity, fingerprint that require syn to build realistic test data.
-- **cargo-dupes CLI tests** (35) — In `cargo-dupes/tests/cli_integration.rs` using `assert_cmd` + `predicates`.
-- **code-dupes CLI tests** (52) — In `code-dupes/tests/` using `assert_cmd` + `predicates`. Covers language detection, Python analysis (functions, lambdas, classes), ambiguous detection.
+- **cargo-dupes CLI tests** — In `cargo-dupes/tests/` using `assert_cmd` + `predicates`.
+- **code-dupes CLI tests** — In `code-dupes/tests/` using `assert_cmd` + `predicates`. Covers language detection, Python analysis (functions, lambdas, classes), ambiguous detection, and generic scanning behavior.
 - **Fixtures** — `cargo-dupes/tests/fixtures/` (6 Rust projects), `code-dupes/tests/fixtures/` (Python projects: `python_dupes`, `python_test_code`, `python_no_dupes`).
 
 ## syn 2 Gotchas

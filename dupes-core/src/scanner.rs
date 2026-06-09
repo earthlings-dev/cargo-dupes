@@ -1,11 +1,13 @@
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
+
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use ignore::WalkBuilder;
 
 /// Configuration for scanning the filesystem for source files.
 pub struct ScanConfig {
     /// Root directory to scan.
     pub root: PathBuf,
-    /// Glob patterns to exclude (simple substring matching for now).
+    /// Glob-like patterns to exclude.
     pub exclude_patterns: Vec<String>,
     /// File extensions to include (without the leading dot). Defaults to `["rs"]`.
     pub extensions: Vec<String>,
@@ -39,25 +41,14 @@ impl ScanConfig {
 #[must_use]
 pub fn scan_files(config: &ScanConfig) -> Vec<PathBuf> {
     let mut files = Vec::new();
+    let exclude_set = build_exclude_set(&config.exclude_patterns);
 
-    for entry in WalkDir::new(&config.root)
-        .into_iter()
-        .filter_entry(|e| {
-            let path = e.path();
-            // Only filter directories (not the root itself for hidden check)
-            if path.is_dir()
-                && let Some(name) = path.file_name().and_then(|n| n.to_str())
-            {
-                if name == "target" {
-                    return false;
-                }
-                // Skip hidden directories, but not the root
-                if name.starts_with('.') && path != config.root.as_path() {
-                    return false;
-                }
-            }
-            true
-        })
+    for entry in WalkBuilder::new(&config.root)
+        .hidden(true)
+        .git_ignore(true)
+        .git_exclude(true)
+        .parents(true)
+        .build()
         .flatten()
     {
         let path = entry.path();
@@ -71,7 +62,7 @@ pub fn scan_files(config: &ScanConfig) -> Vec<PathBuf> {
                         .iter()
                         .any(|e| e.eq_ignore_ascii_case(ext))
                 })
-            && !is_excluded(path, &config.exclude_patterns)
+            && !is_excluded_with_set(path, exclude_set.as_ref(), &config.exclude_patterns)
         {
             files.push(path.to_path_buf());
         }
@@ -83,10 +74,54 @@ pub fn scan_files(config: &ScanConfig) -> Vec<PathBuf> {
 /// Check if a path should be excluded based on exclusion patterns.
 #[must_use]
 pub fn is_excluded(path: &Path, patterns: &[String]) -> bool {
+    let exclude_set = build_exclude_set(patterns);
+    is_excluded_with_set(path, exclude_set.as_ref(), patterns)
+}
+
+/// Check if a path should be excluded with a precompiled glob set.
+fn is_excluded_with_set(path: &Path, exclude_set: Option<&GlobSet>, patterns: &[String]) -> bool {
     let path_str = path.to_string_lossy();
+    if path
+        .components()
+        .any(|component| component.as_os_str().to_string_lossy() == "target")
+    {
+        return true;
+    }
+    if exclude_set.is_some_and(|set| set.is_match(path)) {
+        return true;
+    }
     patterns
         .iter()
         .any(|pattern| path_str.contains(pattern.as_str()))
+}
+
+/// Build a glob set from configured exclude patterns.
+fn build_exclude_set(patterns: &[String]) -> Option<GlobSet> {
+    let mut builder = GlobSetBuilder::new();
+    let mut added = false;
+    for pattern in patterns {
+        for candidate in exclude_variants(pattern) {
+            if let Ok(glob) = Glob::new(&candidate) {
+                builder.add(glob);
+                added = true;
+            }
+        }
+    }
+    if added { builder.build().ok() } else { None }
+}
+
+/// Expand a user pattern into useful path-oriented glob variants.
+fn exclude_variants(pattern: &str) -> Vec<String> {
+    if pattern.contains('*') || pattern.contains('?') || pattern.contains('[') {
+        vec![pattern.to_string()]
+    } else {
+        vec![
+            pattern.to_string(),
+            format!("**/{pattern}"),
+            format!("**/{pattern}/**"),
+            format!("**/{pattern}/"),
+        ]
+    }
 }
 
 #[cfg(test)]

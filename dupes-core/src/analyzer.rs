@@ -29,6 +29,21 @@ pub trait LanguageAnalyzer: Send + Sync {
         config: &AnalysisConfig,
     ) -> Result<Vec<CodeUnit>, Box<dyn std::error::Error + Send + Sync>>;
 
+    /// Parse sub-function code units with precise language-specific spans.
+    ///
+    /// Implementors can override this when they can map nested AST regions back
+    /// to source locations. The core analyzer falls back to normalized-tree
+    /// extraction when this returns no units.
+    fn parse_sub_units(
+        &self,
+        _path: &Path,
+        _source: &str,
+        _config: &AnalysisConfig,
+        _min_nodes: usize,
+    ) -> Result<Vec<CodeUnit>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Vec::new())
+    }
+
     /// Check whether a code unit represents test code.
     ///
     /// The default implementation delegates to [`CodeUnit::is_test`],
