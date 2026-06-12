@@ -1,5 +1,6 @@
 use dupes_core::node::{
-    BinOpKind, LiteralKind, NodeKind, NormalizationContext, NormalizedNode, UnOpKind,
+    BinOpKind, LiteralKind, NodeKind, NormalizationContext, NormalizedNode, PlaceholderKind,
+    UnOpKind,
 };
 use syn::punctuated::Punctuated;
 
@@ -10,6 +11,105 @@ pub fn member_to_string(member: &syn::Member) -> String {
         syn::Member::Named(ident) => ident.to_string(),
         syn::Member::Unnamed(idx) => idx.index.to_string(),
     }
+}
+
+/// Grammar position of a normalized node: expression, pattern, or type.
+#[derive(Clone, Copy)]
+pub enum PlaceholderNodeRole {
+    Expr,
+    Pat,
+    Type,
+}
+
+pub fn placeholder_node(
+    ctx: &mut NormalizationContext,
+    name: &str,
+    kind: PlaceholderKind,
+    role: PlaceholderNodeRole,
+) -> NormalizedNode {
+    let idx = ctx.placeholder(name, kind);
+    let node = match role {
+        PlaceholderNodeRole::Expr => NodeKind::Placeholder(kind, idx),
+        PlaceholderNodeRole::Pat => NodeKind::PatPlaceholder(kind, idx),
+        PlaceholderNodeRole::Type => NodeKind::TypePlaceholder(kind, idx),
+    };
+    NormalizedNode::leaf(node)
+}
+
+pub fn path_segment_nodes(
+    ctx: &mut NormalizationContext,
+    path: &syn::Path,
+    mut normalize_segment: impl FnMut(&mut NormalizationContext, &str) -> NormalizedNode,
+) -> Vec<NormalizedNode> {
+    path.segments
+        .iter()
+        .map(|seg| normalize_segment(ctx, &seg.ident.to_string()))
+        .collect()
+}
+
+/// Normalize every path segment as one placeholder kind and role.
+pub fn uniform_path_segment_nodes(
+    ctx: &mut NormalizationContext,
+    path: &syn::Path,
+    kind: PlaceholderKind,
+    role: PlaceholderNodeRole,
+) -> Vec<NormalizedNode> {
+    path_segment_nodes(ctx, path, |ctx, ident| {
+        placeholder_node(ctx, ident, kind, role)
+    })
+}
+
+/// Collapse a single-segment path to its segment node, or wrap in `multi_kind`.
+pub fn path_node_from_segments(
+    segments: Vec<NormalizedNode>,
+    collapse_single: bool,
+    multi_kind: NodeKind,
+) -> NormalizedNode {
+    if collapse_single && segments.len() == 1 {
+        segments.into_iter().next().unwrap()
+    } else {
+        NormalizedNode::with_children(multi_kind, segments)
+    }
+}
+
+/// Build a node by normalizing each item of a list as its children.
+pub fn normalize_list<T>(
+    kind: NodeKind,
+    items: impl IntoIterator<Item = T>,
+    ctx: &mut NormalizationContext,
+    mut normalize: impl FnMut(T, &mut NormalizationContext) -> NormalizedNode,
+) -> NormalizedNode {
+    NormalizedNode::with_children(
+        kind,
+        items.into_iter().map(|item| normalize(item, ctx)).collect(),
+    )
+}
+
+/// Build a node whose only child is the normalized `child`.
+pub fn one_child_node<T: ?Sized>(
+    kind: NodeKind,
+    child: &T,
+    ctx: &mut NormalizationContext,
+    normalize: impl FnOnce(&T, &mut NormalizationContext) -> NormalizedNode,
+) -> NormalizedNode {
+    NormalizedNode::with_children(kind, vec![normalize(child, ctx)])
+}
+
+/// Build a reference-like node for the role, capturing mutability.
+pub fn reference_node<T: ?Sized>(
+    mutability: Option<&syn::token::Mut>,
+    role: PlaceholderNodeRole,
+    child: &T,
+    ctx: &mut NormalizationContext,
+    normalize: impl FnOnce(&T, &mut NormalizationContext) -> NormalizedNode,
+) -> NormalizedNode {
+    let mutable = mutability.is_some();
+    let kind = match role {
+        PlaceholderNodeRole::Expr => NodeKind::Reference { mutable },
+        PlaceholderNodeRole::Pat => NodeKind::PatReference { mutable },
+        PlaceholderNodeRole::Type => NodeKind::TypeReference { mutable },
+    };
+    NormalizedNode::with_children(kind, vec![normalize(child, ctx)])
 }
 
 pub fn normalize_macro(mac: &syn::Macro, ctx: &mut NormalizationContext) -> NormalizedNode {
@@ -30,17 +130,23 @@ pub fn normalize_macro(mac: &syn::Macro, ctx: &mut NormalizationContext) -> Norm
     NormalizedNode::with_children(NodeKind::MacroCall { name }, args)
 }
 
+/// Build a literal node of the given kind with its value erased.
+#[must_use]
+pub const fn literal_node(kind: LiteralKind) -> NormalizedNode {
+    NormalizedNode::leaf(NodeKind::Literal(kind))
+}
+
 #[must_use]
 pub const fn normalize_lit(lit: &syn::Lit) -> NormalizedNode {
     match lit {
-        syn::Lit::Str(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::Str)),
-        syn::Lit::ByteStr(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::ByteStr)),
-        syn::Lit::CStr(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::CStr)),
-        syn::Lit::Byte(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::Byte)),
-        syn::Lit::Char(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::Char)),
-        syn::Lit::Int(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::Int)),
-        syn::Lit::Float(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::Float)),
-        syn::Lit::Bool(_) => NormalizedNode::leaf(NodeKind::Literal(LiteralKind::Bool)),
+        syn::Lit::Str(_) => literal_node(LiteralKind::Str),
+        syn::Lit::ByteStr(_) => literal_node(LiteralKind::ByteStr),
+        syn::Lit::CStr(_) => literal_node(LiteralKind::CStr),
+        syn::Lit::Byte(_) => literal_node(LiteralKind::Byte),
+        syn::Lit::Char(_) => literal_node(LiteralKind::Char),
+        syn::Lit::Int(_) => literal_node(LiteralKind::Int),
+        syn::Lit::Float(_) => literal_node(LiteralKind::Float),
+        syn::Lit::Bool(_) => literal_node(LiteralKind::Bool),
         _ => NormalizedNode::leaf(NodeKind::Opaque),
     }
 }

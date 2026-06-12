@@ -1,15 +1,17 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::process;
 
 use crate::AnalysisResult;
 use crate::analyzer::LanguageAnalyzer;
 use crate::code_unit::DetectionDimension;
 use crate::config::Config;
 use crate::fingerprint::Fingerprint;
+use crate::grouper::DuplicateGroup;
 use crate::ignore::{self, IgnoreEntry};
-use crate::output::Reporter;
 use crate::output::json::JsonReporter;
 use crate::output::text::TextReporter;
+use crate::output::{ReportOptions, ReportSection, Reporter};
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -115,6 +117,156 @@ pub enum OutputFormat {
     Json,
 }
 
+/// Global CLI options shared by `cargo-dupes` and `code-dupes`.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+#[allow(clippy::struct_excessive_bools)] // clap flags are idiomatically bools
+pub struct CommonCliArgs {
+    /// Path to analyze (defaults to current directory).
+    #[cfg_attr(feature = "cli", arg(short, long, global = true))]
+    pub path: Option<PathBuf>,
+    /// Minimum AST node count for analysis.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub min_nodes: Option<usize>,
+    /// Minimum source line count for analysis.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub min_lines: Option<usize>,
+    /// Similarity threshold (0.0-1.0).
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub threshold: Option<f64>,
+    /// Output format.
+    #[cfg_attr(feature = "cli", arg(long, global = true, default_value = "text"))]
+    pub format: OutputFormat,
+    /// Exclude patterns (can be repeated).
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub exclude: Vec<String>,
+    /// Exclude test code identified by the active language analyzer.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub exclude_tests: bool,
+    /// Enable sub-function duplicate detection.
+    #[cfg_attr(feature = "cli", arg(long, short = 's', global = true))]
+    pub sub_function: bool,
+    /// Disable sub-function duplicate detection when enabled by config.
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, global = true, conflicts_with = "sub_function")
+    )]
+    pub no_sub_function: bool,
+    /// Minimum AST node count for sub-function units.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub min_sub_nodes: Option<usize>,
+    /// Include rule-suppressed duplicate groups in the report body.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub show_suppressed: bool,
+    /// Verbose statistics: per-rule suppression breakdown.
+    #[cfg_attr(feature = "cli", arg(short = 'v', long, global = true))]
+    pub verbose: bool,
+    /// Disable a suppression/admission rule by id (can be repeated).
+    #[cfg_attr(
+        feature = "cli",
+        arg(long = "disable-rule", value_name = "RULE_ID", global = true)
+    )]
+    pub disable_rule: Vec<String>,
+    /// Enable a rule by id (can be repeated; overrides config disable).
+    #[cfg_attr(
+        feature = "cli",
+        arg(long = "enable-rule", value_name = "RULE_ID", global = true)
+    )]
+    pub enable_rule: Vec<String>,
+    /// Enable only the selected detection dimension (can be repeated).
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, global = true, conflicts_with = "disable_dimension")
+    )]
+    pub dimension: Vec<DetectionDimension>,
+    /// Disable a detection dimension (can be repeated).
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, global = true, conflicts_with = "dimension")
+    )]
+    pub disable_dimension: Vec<DetectionDimension>,
+    /// Minimum token count for token-window detection.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub token_min_tokens: Option<usize>,
+    /// Minimum source line span for token-window detection.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub token_min_lines: Option<usize>,
+    /// Similarity threshold for normalized token near-duplicates.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub token_threshold: Option<f64>,
+    /// Minimum line count for line-window detection.
+    #[cfg_attr(feature = "cli", arg(long, global = true))]
+    pub line_min_lines: Option<usize>,
+}
+
+impl Default for CommonCliArgs {
+    fn default() -> Self {
+        Self {
+            path: None,
+            min_nodes: None,
+            min_lines: None,
+            threshold: None,
+            format: OutputFormat::Text,
+            exclude: Vec::new(),
+            exclude_tests: false,
+            sub_function: false,
+            no_sub_function: false,
+            min_sub_nodes: None,
+            show_suppressed: false,
+            verbose: false,
+            disable_rule: Vec::new(),
+            enable_rule: Vec::new(),
+            dimension: Vec::new(),
+            disable_dimension: Vec::new(),
+            token_min_tokens: None,
+            token_min_lines: None,
+            token_threshold: None,
+            line_min_lines: None,
+        }
+    }
+}
+
+impl CommonCliArgs {
+    /// Resolve the analysis root from CLI input.
+    #[must_use]
+    pub fn root(&self) -> PathBuf {
+        self.path
+            .clone()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+    }
+
+    /// Convert common CLI options into shared core overrides.
+    #[must_use]
+    pub fn overrides(&self, generic_extensions: Vec<String>) -> CliOverrides {
+        CliOverrides {
+            min_nodes: self.min_nodes,
+            min_lines: self.min_lines,
+            threshold: self.threshold,
+            exclude: self.exclude.clone(),
+            exclude_tests: if self.exclude_tests { Some(true) } else { None },
+            sub_function: if self.no_sub_function {
+                Some(false)
+            } else if self.sub_function {
+                Some(true)
+            } else {
+                None
+            },
+            min_sub_nodes: self.min_sub_nodes,
+            enabled_dimensions: self.dimension.clone(),
+            disabled_dimensions: self.disable_dimension.clone(),
+            token_min_tokens: self.token_min_tokens,
+            token_min_lines: self.token_min_lines,
+            token_threshold: self.token_threshold,
+            line_min_lines: self.line_min_lines,
+            show_suppressed: self.show_suppressed,
+            verbose: self.verbose,
+            disable_rule: self.disable_rule.clone(),
+            enable_rule: self.enable_rule.clone(),
+            generic_extensions,
+        }
+    }
+}
+
 /// CLI subcommands shared between `cargo-dupes` and `code-dupes`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "cli", derive(clap::Subcommand))]
@@ -156,6 +308,27 @@ pub enum Command {
     },
 }
 
+impl Command {
+    /// Build threshold overrides for `check` commands.
+    #[must_use]
+    pub const fn check_thresholds(&self) -> Option<CheckThresholds> {
+        match self {
+            Self::Check {
+                max_exact,
+                max_near,
+                max_exact_percent,
+                max_near_percent,
+            } => Some(CheckThresholds {
+                max_exact: *max_exact,
+                max_near: *max_near,
+                max_exact_percent: *max_exact_percent,
+                max_near_percent: *max_near_percent,
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// Thresholds for the `check` subcommand.
 #[derive(Debug, Clone, Default)]
 pub struct CheckThresholds {
@@ -175,10 +348,16 @@ pub struct CliOverrides {
     pub exclude_tests: Option<bool>,
     pub sub_function: Option<bool>,
     pub min_sub_nodes: Option<usize>,
+    pub enabled_dimensions: Vec<DetectionDimension>,
     pub disabled_dimensions: Vec<DetectionDimension>,
     pub token_min_tokens: Option<usize>,
+    pub token_min_lines: Option<usize>,
     pub token_threshold: Option<f64>,
     pub line_min_lines: Option<usize>,
+    pub show_suppressed: bool,
+    pub verbose: bool,
+    pub disable_rule: Vec<String>,
+    pub enable_rule: Vec<String>,
     pub generic_extensions: Vec<String>,
 }
 
@@ -190,6 +369,70 @@ pub struct AnalysisOutput {
 }
 
 // ---------------------------------------------------------------------------
+// Command orchestration
+// ---------------------------------------------------------------------------
+
+/// Run a CLI command, invoking `analyze` only for commands that need analysis.
+pub fn run_command_with_analysis(
+    root: &Path,
+    command: &Command,
+    writer: &mut impl Write,
+    analyze: impl FnOnce() -> CliResult<AnalysisOutput>,
+) -> CliResult {
+    if matches!(command, Command::Ignored) {
+        return cmd_ignored(root, writer);
+    }
+    let output = analyze()?;
+    emit_warnings(&output.result);
+    dispatch_analysis_command(root, command, &output, writer)
+}
+
+/// Dispatch a command after analysis has completed.
+pub fn dispatch_analysis_command(
+    root: &Path,
+    command: &Command,
+    output: &AnalysisOutput,
+    writer: &mut impl Write,
+) -> CliResult {
+    let reporter = output.reporter.as_ref();
+
+    match command {
+        Command::Stats => cmd_stats(&output.result, reporter, writer),
+        Command::Report => cmd_report(&output.result, reporter, writer),
+        Command::Check { .. } => cmd_check(
+            &output.config,
+            &output.result,
+            reporter,
+            writer,
+            &command
+                .check_thresholds()
+                .expect("check thresholds exist for check command"),
+        ),
+        Command::Cleanup { dry_run } => cmd_cleanup(root, &output.result, writer, *dry_run),
+        Command::Ignore {
+            fingerprint,
+            reason,
+        } => cmd_ignore(root, fingerprint, reason.clone(), &output.result, writer),
+        Command::Ignored => Ok(()),
+    }
+}
+
+/// Write analysis warnings using the shared CLI format.
+pub fn emit_warnings(result: &AnalysisResult) {
+    for warning in &result.warnings {
+        eprintln!("Warning: {warning}");
+    }
+}
+
+/// Exit with the CLI's documented exit code.
+pub fn exit_with_error(error: &CliError) -> ! {
+    if !matches!(error, CliError::CheckFailed) {
+        eprintln!("Error: {error}");
+    }
+    process::exit(error.exit_code());
+}
+
+// ---------------------------------------------------------------------------
 // Config helpers
 // ---------------------------------------------------------------------------
 
@@ -197,47 +440,51 @@ pub struct AnalysisOutput {
 ///
 /// CLI `--exclude` patterns are *appended* to config-file excludes (not replaced).
 pub fn apply_overrides(config: &mut Config, overrides: &CliOverrides) {
-    if let Some(min_nodes) = overrides.min_nodes {
-        config.min_nodes = min_nodes;
-    }
-    if let Some(min_lines) = overrides.min_lines {
-        config.min_lines = min_lines;
-    }
-    if let Some(threshold) = overrides.threshold {
-        config.similarity_threshold = threshold;
-    }
+    use crate::config::override_with;
+    override_with(&mut config.min_nodes, overrides.min_nodes);
+    override_with(&mut config.min_lines, overrides.min_lines);
+    override_with(&mut config.similarity_threshold, overrides.threshold);
     if !overrides.exclude.is_empty() {
         config.exclude.extend(overrides.exclude.iter().cloned());
     }
-    if let Some(v) = overrides.exclude_tests {
-        config.exclude_tests = v;
-    }
-    if let Some(v) = overrides.sub_function {
-        config.sub_function = v;
-    }
-    if let Some(min_sub_nodes) = overrides.min_sub_nodes {
-        config.min_sub_nodes = min_sub_nodes;
+    override_with(&mut config.exclude_tests, overrides.exclude_tests);
+    override_with(&mut config.sub_function, overrides.sub_function);
+    override_with(&mut config.min_sub_nodes, overrides.min_sub_nodes);
+    if !overrides.enabled_dimensions.is_empty() {
+        config.enable_only_dimensions(overrides.enabled_dimensions.iter().copied());
     }
     for &dimension in &overrides.disabled_dimensions {
         config.disable_dimension(dimension);
     }
-    if let Some(token_min_tokens) = overrides.token_min_tokens {
-        config.token_min_tokens = token_min_tokens;
-    }
-    if let Some(token_threshold) = overrides.token_threshold {
-        config.token_similarity_threshold = token_threshold;
-    }
-    if let Some(line_min_lines) = overrides.line_min_lines {
-        config.line_min_lines = line_min_lines;
-    }
+    let rule_warnings = config
+        .suppression
+        .apply_toggles(&overrides.disable_rule, &overrides.enable_rule);
+    config.load_warnings.extend(rule_warnings);
+    override_with(&mut config.token_min_tokens, overrides.token_min_tokens);
+    override_with(&mut config.token_min_lines, overrides.token_min_lines);
+    override_with(
+        &mut config.token_similarity_threshold,
+        overrides.token_threshold,
+    );
+    override_with(&mut config.line_min_lines, overrides.line_min_lines);
 }
 
 /// Create a reporter for the given output format.
 #[must_use]
-pub fn create_reporter(format: OutputFormat, root: Option<&Path>) -> Box<dyn Reporter> {
+pub fn create_reporter(
+    format: OutputFormat,
+    root: Option<&Path>,
+    options: ReportOptions,
+) -> Box<dyn Reporter> {
     match format {
-        OutputFormat::Text => Box::new(TextReporter::new(root.map(Path::to_path_buf))),
-        OutputFormat::Json => Box::new(JsonReporter::new(root.map(Path::to_path_buf))),
+        OutputFormat::Text => Box::new(TextReporter::with_options(
+            root.map(Path::to_path_buf),
+            options,
+        )),
+        OutputFormat::Json => Box::new(JsonReporter::with_options(
+            root.map(Path::to_path_buf),
+            options,
+        )),
     }
 }
 
@@ -295,7 +542,14 @@ pub fn run_analysis(
     }
 
     let result = crate::analyze_with_generic(analyzer, &ast_files, &generic_files, &config)?;
-    let reporter = create_reporter(format, Some(root));
+    let reporter = create_reporter(
+        format,
+        Some(root),
+        ReportOptions {
+            show_suppressed: overrides.show_suppressed,
+            verbose: overrides.verbose,
+        },
+    );
 
     Ok(AnalysisOutput {
         config,
@@ -353,51 +607,35 @@ pub fn cmd_check(
         + result.stats.sub_near_groups
         + result.stats.token_normalized_near_groups;
 
-    if let Some(threshold) = max_exact
-        && exact_group_count > threshold
-    {
-        writeln!(
-            writer,
-            "\nCheck FAILED: {exact_group_count} exact duplicate groups (max: {threshold})"
-        )?;
-        reporter.report_full(result, writer)?;
-        failed = true;
-    }
+    failed |= check_count_threshold(
+        max_exact,
+        exact_group_count,
+        "exact",
+        result,
+        reporter,
+        writer,
+    )?;
+    failed |= check_count_threshold(max_near, near_group_count, "near", result, reporter, writer)?;
 
-    if let Some(threshold) = max_near
-        && near_group_count > threshold
-    {
-        writeln!(
-            writer,
-            "\nCheck FAILED: {near_group_count} near duplicate groups (max: {threshold})"
-        )?;
-        reporter.report_full(result, writer)?;
-        failed = true;
-    }
+    failed |= check_percent_threshold(
+        max_exact_pct,
+        result.stats.exact_duplicate_percent(),
+        "exact",
+        &result.exact_groups,
+        ReportSection::Exact,
+        reporter,
+        writer,
+    )?;
 
-    if let Some(threshold) = max_exact_pct {
-        let actual = result.stats.exact_duplicate_percent();
-        if actual > threshold {
-            writeln!(
-                writer,
-                "\nCheck FAILED: {actual:.1}% exact duplicate lines (max: {threshold:.1}%)"
-            )?;
-            reporter.report_exact(&result.exact_groups, writer)?;
-            failed = true;
-        }
-    }
-
-    if let Some(threshold) = max_near_pct {
-        let actual = result.stats.near_duplicate_percent();
-        if actual > threshold {
-            writeln!(
-                writer,
-                "\nCheck FAILED: {actual:.1}% near duplicate lines (max: {threshold:.1}%)"
-            )?;
-            reporter.report_near(&result.near_groups, writer)?;
-            failed = true;
-        }
-    }
+    failed |= check_percent_threshold(
+        max_near_pct,
+        result.stats.near_duplicate_percent(),
+        "near",
+        &result.near_groups,
+        ReportSection::Near,
+        reporter,
+        writer,
+    )?;
 
     if failed {
         Err(CliError::CheckFailed)
@@ -412,15 +650,67 @@ pub fn cmd_ignore(
     root: &Path,
     fingerprint: &str,
     reason: Option<String>,
+    result: &AnalysisResult,
     writer: &mut impl Write,
 ) -> CliResult {
     let fp = Fingerprint::from_hex(fingerprint)
         .ok_or_else(|| CliError::InvalidFingerprint(fingerprint.to_string()))?;
     let mut ignore_file = ignore::load_ignore_file(root);
-    ignore::add_ignore(&mut ignore_file, &fp, reason, vec![]);
+    // Rule-suppressed groups can be registered too, so a project can pin a
+    // finding before disabling the rule that hides it.
+    let group = result
+        .groups_with_suppressed()
+        .find(|group| group.fingerprint == fp);
+    let (members, member_fingerprints) = group.map_or_else(Default::default, |group| {
+        (
+            group
+                .members
+                .iter()
+                .map(|member| display_member(root, member))
+                .collect(),
+            member_fingerprint_hexes(group),
+        )
+    });
+    ignore::add_ignore_with_member_fingerprints(
+        &mut ignore_file,
+        &fp,
+        reason,
+        members,
+        member_fingerprints,
+    );
     ignore::save_ignore_file(root, &ignore_file)?;
     writeln!(writer, "Added {fingerprint} to ignore list.")?;
+    if group.is_none() {
+        writeln!(
+            writer,
+            "Note: no current duplicate group matches this fingerprint; the entry \
+             was recorded without member details."
+        )?;
+    }
     Ok(())
+}
+
+/// Format one group member for ignore-entry documentation.
+fn display_member(root: &Path, member: &crate::code_unit::CodeUnit) -> String {
+    format!(
+        "{} ({}:{}-{})",
+        member.name,
+        crate::output::display_path(Some(root), &member.file),
+        member.line_start,
+        member.line_end
+    )
+}
+
+/// The sorted, deduplicated member content fingerprints of a group.
+fn member_fingerprint_hexes(group: &DuplicateGroup) -> Vec<String> {
+    let mut hexes: Vec<String> = group
+        .members
+        .iter()
+        .map(|member| member.fingerprint.to_hex())
+        .collect();
+    hexes.sort_unstable();
+    hexes.dedup();
+    hexes
 }
 
 /// List all ignored fingerprints.
@@ -429,10 +719,7 @@ pub fn cmd_ignored(root: &Path, writer: &mut impl Write) -> CliResult {
     if ignore_file.ignore.is_empty() {
         writeln!(writer, "No ignored fingerprints.")?;
     } else {
-        writeln!(writer, "Ignored fingerprints:")?;
-        for entry in &ignore_file.ignore {
-            write_ignore_entry(writer, entry)?;
-        }
+        write_ignore_entries(writer, "Ignored fingerprints:", &ignore_file.ignore)?;
     }
     Ok(())
 }
@@ -447,35 +734,161 @@ pub fn cmd_cleanup(
     let mut ignore_file = ignore::load_ignore_file(root);
 
     if dry_run {
-        let stale = ignore::find_stale_entries(&ignore_file, &result.all_fingerprints);
+        let stale = ignore::find_stale_entries(
+            &ignore_file,
+            &result.all_fingerprints,
+            &result.all_member_fingerprint_sets,
+        );
         if stale.is_empty() {
             writeln!(writer, "No stale entries found.")?;
         } else {
             writeln!(writer, "Stale entries (dry run):")?;
             for entry in &stale {
                 write_ignore_entry(writer, entry)?;
+                write_successor_hints(writer, root, entry, result)?;
             }
             writeln!(writer, "\n{} stale entries would be removed.", stale.len())?;
         }
     } else {
-        let removed = ignore::remove_stale_entries(&mut ignore_file, &result.all_fingerprints);
+        let removed = ignore::remove_stale_entries(
+            &mut ignore_file,
+            &result.all_fingerprints,
+            &result.all_member_fingerprint_sets,
+        );
         if removed.is_empty() {
             writeln!(writer, "No stale entries found.")?;
         } else {
             ignore::save_ignore_file(root, &ignore_file)?;
-            writeln!(writer, "Removed stale entries:")?;
-            for entry in &removed {
-                write_ignore_entry(writer, entry)?;
-            }
+            write_ignore_entries(writer, "Removed stale entries:", &removed)?;
             writeln!(writer, "\nRemoved {} stale entries.", removed.len())?;
         }
     }
     Ok(())
 }
 
+/// Suggest live groups that overlap a stale entry's recorded members.
+///
+/// When registered content is edited, the duplicate family usually survives
+/// with a new fingerprint over shifted content. Pointing at live groups that
+/// overlap the entry's recorded locations turns registry repair into a
+/// guided rewrite instead of a search.
+fn write_successor_hints(
+    writer: &mut impl Write,
+    root: &Path,
+    entry: &IgnoreEntry,
+    result: &AnalysisResult,
+) -> io::Result<()> {
+    let locations = member_locations(entry);
+    if locations.is_empty() {
+        return Ok(());
+    }
+    // Suppressed groups count as successors: a stale entry can be re-paired
+    // to a finding the rules hide from the default report.
+    for group in result.groups_with_suppressed() {
+        let overlapping = group.members.iter().any(|member| {
+            let member_path = crate::output::display_path(Some(root), &member.file);
+            locations.iter().any(|(path, start, end)| {
+                member_path.ends_with(path.as_str())
+                    && member.line_start <= end.saturating_add(SUCCESSOR_LINE_SLACK)
+                    && *start <= member.line_end.saturating_add(SUCCESSOR_LINE_SLACK)
+            })
+        });
+        if overlapping {
+            writeln!(
+                writer,
+                "    possible successor: {} ({}/{}, {} members)",
+                group.fingerprint,
+                group.dimension,
+                group.match_kind,
+                group.members.len()
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Lines of drift tolerated when pairing stale entries with successors.
+const SUCCESSOR_LINE_SLACK: usize = 5;
+
+/// Parse `path:start-end` locations out of an entry's member descriptions.
+fn member_locations(entry: &IgnoreEntry) -> Vec<(String, usize, usize)> {
+    entry
+        .members
+        .iter()
+        .flat_map(|member| member.split([' ', '(', ')', '[', ']', ',']))
+        .filter_map(|token| {
+            let (path, range) = token.rsplit_once(':')?;
+            let (start, end) = range.split_once('-')?;
+            if path.is_empty() {
+                return None;
+            }
+            Some((path.to_string(), start.parse().ok()?, end.parse().ok()?))
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Write a titled list of ignore entries.
+fn write_ignore_entries<'a>(
+    writer: &mut impl Write,
+    title: &str,
+    entries: impl IntoIterator<Item = &'a IgnoreEntry>,
+) -> io::Result<()> {
+    writeln!(writer, "{title}")?;
+    for entry in entries {
+        write_ignore_entry(writer, entry)?;
+    }
+    Ok(())
+}
+
+/// Report one exceeded group-count threshold, returning whether it failed.
+fn check_count_threshold(
+    threshold: Option<usize>,
+    count: usize,
+    label: &str,
+    result: &AnalysisResult,
+    reporter: &dyn Reporter,
+    writer: &mut dyn Write,
+) -> io::Result<bool> {
+    if let Some(threshold) = threshold
+        && count > threshold
+    {
+        writeln!(
+            writer,
+            "\nCheck FAILED: {count} {label} duplicate groups (max: {threshold})"
+        )?;
+        reporter.report_full(result, writer)?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+/// Report one exceeded percentage threshold, returning whether it failed.
+fn check_percent_threshold(
+    threshold: Option<f64>,
+    actual: f64,
+    label: &str,
+    groups: &[DuplicateGroup],
+    section: ReportSection,
+    reporter: &dyn Reporter,
+    writer: &mut dyn Write,
+) -> io::Result<bool> {
+    let Some(threshold) = threshold else {
+        return Ok(false);
+    };
+    if actual <= threshold {
+        return Ok(false);
+    }
+    writeln!(
+        writer,
+        "\nCheck FAILED: {actual:.1}% {label} duplicate lines (max: {threshold:.1}%)"
+    )?;
+    reporter.report_groups(groups, writer, section)?;
+    Ok(true)
+}
 
 fn write_ignore_entry(writer: &mut impl Write, entry: &IgnoreEntry) -> io::Result<()> {
     write!(writer, "  {}", entry.fingerprint)?;
@@ -486,4 +899,147 @@ fn write_ignore_entry(writer: &mut impl Write, entry: &IgnoreEntry) -> io::Resul
         write!(writer, " [{}]", entry.members.join(", "))?;
     }
     writeln!(writer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::code_unit::{CodeUnit, CodeUnitKind, DetectionDimension};
+    use crate::grouper::{DuplicationStats, MatchKind};
+    use crate::output::test_support;
+    use tempfile::TempDir;
+
+    fn window_member(seed: &str, file: &str, line_start: usize, line_end: usize) -> CodeUnit {
+        crate::text_units::window_unit(
+            Path::new(file),
+            "line window",
+            CodeUnitKind::LineWindow,
+            line_start,
+            line_end,
+            &[seed.to_string()],
+        )
+    }
+
+    fn empty_result() -> AnalysisResult {
+        test_support::analysis_result(
+            DuplicationStats::default(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    fn result_with_line_group(group: DuplicateGroup) -> AnalysisResult {
+        let mut result = empty_result();
+        result.line_exact_groups = vec![group];
+        result
+    }
+
+    #[test]
+    fn cmd_ignore_records_member_fingerprints_from_the_live_group() {
+        let tmp = TempDir::new().unwrap();
+        let members = vec![
+            window_member("alpha", "src/a.rs", 10, 14),
+            window_member("beta", "src/b.rs", 20, 24),
+        ];
+        let group_fp = Fingerprint::from_bytes(b"group");
+        let group = test_support::duplicate_group(
+            DetectionDimension::Line,
+            MatchKind::Exact,
+            group_fp,
+            1.0,
+            members,
+        );
+        let result = result_with_line_group(group);
+
+        let mut out = Vec::new();
+        cmd_ignore(
+            tmp.path(),
+            &group_fp.to_hex(),
+            Some("intentional family".to_string()),
+            &result,
+            &mut out,
+        )
+        .unwrap();
+
+        let file = crate::ignore::load_ignore_file(tmp.path());
+        assert_eq!(file.ignore.len(), 1);
+        assert_eq!(file.ignore[0].member_fingerprints.len(), 2);
+        assert!(file.ignore[0].members[0].contains("src/a.rs:10-14"));
+        let text = String::from_utf8(out).unwrap();
+        assert!(!text.contains("Note:"), "found groups need no note: {text}");
+
+        // Unmatched fingerprints are still recorded, with a note and
+        // without member details.
+        let unmatched = Fingerprint::from_bytes(b"unmatched");
+        let mut note_out = Vec::new();
+        cmd_ignore(
+            tmp.path(),
+            &unmatched.to_hex(),
+            None,
+            &result,
+            &mut note_out,
+        )
+        .unwrap();
+        let file = crate::ignore::load_ignore_file(tmp.path());
+        assert_eq!(file.ignore.len(), 2);
+        assert!(file.ignore[1].member_fingerprints.is_empty());
+        assert!(String::from_utf8(note_out).unwrap().contains("Note:"));
+    }
+
+    #[test]
+    fn member_locations_parse_registry_style_descriptions() {
+        let entry = IgnoreEntry {
+            fingerprint: "ffffffffffffffff".to_string(),
+            reason: None,
+            members: vec![
+                "closure body (dupes-treesitter/src/normalizer.rs:422-425)".to_string(),
+                "token window dupes-rust/tests/core_with_syn_tests.rs:325-346".to_string(),
+            ],
+            member_fingerprints: Vec::new(),
+        };
+
+        let locations = member_locations(&entry);
+
+        assert!(locations.contains(&("dupes-treesitter/src/normalizer.rs".to_string(), 422, 425)));
+        assert!(locations.contains(&(
+            "dupes-rust/tests/core_with_syn_tests.rs".to_string(),
+            325,
+            346
+        )));
+    }
+
+    #[test]
+    fn cleanup_dry_run_suggests_successors_for_stale_entries() {
+        let tmp = TempDir::new().unwrap();
+        let mut ignore_file = crate::ignore::IgnoreFile::default();
+        ignore_file.ignore.push(IgnoreEntry {
+            fingerprint: "deadbeefdeadbeef".to_string(),
+            reason: None,
+            members: vec!["line window (src/a.rs:10-14)".to_string()],
+            member_fingerprints: Vec::new(),
+        });
+        crate::ignore::save_ignore_file(tmp.path(), &ignore_file).unwrap();
+
+        let successor_fp = Fingerprint::from_bytes(b"successor");
+        let members = vec![
+            window_member("shifted", "src/a.rs", 12, 16),
+            window_member("shifted", "src/b.rs", 30, 34),
+        ];
+        let group = test_support::duplicate_group(
+            DetectionDimension::Line,
+            MatchKind::Exact,
+            successor_fp,
+            1.0,
+            members,
+        );
+        let result = result_with_line_group(group);
+
+        let mut out = Vec::new();
+        cmd_cleanup(tmp.path(), &result, &mut out, true).unwrap();
+
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("possible successor"), "{text}");
+        assert!(text.contains(&successor_fp.to_hex()), "{text}");
+    }
 }

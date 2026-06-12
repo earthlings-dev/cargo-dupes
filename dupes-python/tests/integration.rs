@@ -1,21 +1,70 @@
 use std::path::PathBuf;
 
 use dupes_core::analyzer::LanguageAnalyzer;
+use dupes_core::code_unit::{CodeUnit, CodeUnitKind};
 use dupes_core::config::AnalysisConfig;
 use dupes_python::PythonAnalyzer;
 
-fn default_config() -> AnalysisConfig {
+#[derive(Clone, Copy)]
+enum FingerprintExpectation {
+    Same,
+    Different,
+}
+
+const fn default_config() -> AnalysisConfig {
     AnalysisConfig {
         min_nodes: 1,
         min_lines: 1,
     }
 }
 
-fn parse(source: &str) -> Vec<dupes_core::code_unit::CodeUnit> {
+fn parse_with_config(source: &str, config: &AnalysisConfig) -> Vec<CodeUnit> {
     let analyzer = PythonAnalyzer::new();
     analyzer
-        .parse_file(&PathBuf::from("test.py"), source, &default_config())
+        .parse_file(&PathBuf::from("test.py"), source, config)
         .expect("parse should succeed")
+}
+
+fn parse(source: &str) -> Vec<CodeUnit> {
+    parse_with_config(source, &default_config())
+}
+
+fn units_of_kind<'a>(units: &'a [CodeUnit], kind: &CodeUnitKind) -> Vec<&'a CodeUnit> {
+    units.iter().filter(|u| &u.kind == kind).collect()
+}
+
+fn assert_two_unit_fingerprints(source: &str, expectation: FingerprintExpectation, message: &str) {
+    let units = parse(source);
+    assert_eq!(units.len(), 2);
+    assert_fingerprint_expectation(&units[0], &units[1], expectation, message);
+}
+
+fn assert_kind_fingerprints(
+    source: &str,
+    kind: &CodeUnitKind,
+    expectation: FingerprintExpectation,
+    message: &str,
+) {
+    let units = parse(source);
+    let matches = units_of_kind(&units, kind);
+    assert_eq!(matches.len(), 2);
+    assert_fingerprint_expectation(matches[0], matches[1], expectation, message);
+}
+
+fn assert_fingerprint_expectation(
+    left: &CodeUnit,
+    right: &CodeUnit,
+    expectation: FingerprintExpectation,
+    message: &str,
+) {
+    match expectation {
+        FingerprintExpectation::Same => {
+            assert_eq!(left.fingerprint, right.fingerprint, "{message}");
+        }
+        FingerprintExpectation::Different => {
+            assert_ne!(left.fingerprint, right.fingerprint, "{message}");
+        }
+    }
 }
 
 // -- Basic parsing --
@@ -23,13 +72,13 @@ fn parse(source: &str) -> Vec<dupes_core::code_unit::CodeUnit> {
 #[test]
 fn parses_top_level_functions() {
     let units = parse(
-        r#"
+        r"
 def add(a, b):
     return a + b
 
 def subtract(a, b):
     return a - b
-"#,
+",
     );
     assert_eq!(units.len(), 2);
     assert_eq!(units[0].name, "add");
@@ -39,28 +88,22 @@ def subtract(a, b):
 #[test]
 fn parses_class_methods() {
     let units = parse(
-        r#"
+        r"
 class Calculator:
     def add(self, a, b):
         return a + b
 
     def subtract(self, a, b):
         return a - b
-"#,
+",
     );
     // 1 class + 2 methods
     assert_eq!(units.len(), 3);
-    let methods: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Function)
-        .collect();
+    let methods = units_of_kind(&units, &CodeUnitKind::Function);
     assert_eq!(methods.len(), 2);
     assert_eq!(methods[0].name, "add");
     assert_eq!(methods[1].name, "subtract");
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
+    let classes = units_of_kind(&units, &CodeUnitKind::Class);
     assert_eq!(classes.len(), 1);
     assert_eq!(classes[0].name, "Calculator");
 }
@@ -68,12 +111,12 @@ class Calculator:
 #[test]
 fn parses_nested_functions() {
     let units = parse(
-        r#"
+        r"
 def outer(a, b):
     def inner(x):
         return x * 2
     return inner(a) + inner(b)
-"#,
+",
     );
     assert_eq!(units.len(), 2);
     assert_eq!(units[0].name, "outer");
@@ -83,7 +126,7 @@ def outer(a, b):
 #[test]
 fn parses_async_functions() {
     let units = parse(
-        r#"
+        r"
 async def fetch(url):
     result = await get(url)
     return result
@@ -91,7 +134,7 @@ async def fetch(url):
 def sync_fetch(url):
     result = get(url)
     return result
-"#,
+",
     );
     assert_eq!(units.len(), 2);
     assert_eq!(units[0].name, "fetch");
@@ -103,13 +146,13 @@ def sync_fetch(url):
 #[test]
 fn test_detection_by_name() {
     let units = parse(
-        r#"
+        r"
 def test_addition():
     assert 1 + 1 == 2
 
 def test_subtraction():
     assert 2 - 1 == 1
-"#,
+",
     );
     assert_eq!(units.len(), 2);
     assert!(units[0].is_test, "test_addition should be tagged as test");
@@ -122,13 +165,13 @@ def test_subtraction():
 #[test]
 fn non_test_functions_not_tagged() {
     let units = parse(
-        r#"
+        r"
 def add(a, b):
     return a + b
 
 def helper():
     return 42
-"#,
+",
     );
     assert_eq!(units.len(), 2);
     assert!(!units[0].is_test, "add should not be tagged as test");
@@ -138,9 +181,30 @@ def helper():
 // -- Fingerprinting --
 
 #[test]
-fn duplicate_functions_same_fingerprint() {
+fn python_fingerprints_unchanged_by_method_name_preservation() {
+    // Python method calls normalize as Call + FieldAccess, never
+    // NodeKind::MethodCall, so Rust-side method-name preservation must not
+    // move Python fingerprints; this pinned hex holds across Rust
+    // normalization regimes.
     let units = parse(
-        r#"
+        r"
+class Adder:
+    def compute(self, a, b):
+        result = a + b
+        return result
+",
+    );
+    let compute = units
+        .iter()
+        .find(|u| u.name == "compute")
+        .expect("compute unit extracted");
+    assert_eq!(compute.fingerprint.to_hex(), "9ee8e92bc616589a");
+}
+
+#[test]
+fn duplicate_functions_same_fingerprint() {
+    assert_two_unit_fingerprints(
+        r"
 def add(a, b):
     result = a + b
     return result
@@ -148,55 +212,46 @@ def add(a, b):
 def add2(x, y):
     result = x + y
     return result
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_eq!(
-        units[0].fingerprint, units[1].fingerprint,
-        "Structurally identical functions should have the same fingerprint"
+",
+        FingerprintExpectation::Same,
+        "Structurally identical functions should have the same fingerprint",
     );
 }
 
 #[test]
 fn different_functions_different_fingerprint() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def add(a, b):
     return a + b
 
 def mul(a, b):
     return a * b
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "Structurally different functions should have different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "Structurally different functions should have different fingerprints",
     );
 }
 
 #[test]
 fn renamed_variables_same_fingerprint() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def foo(a, b):
     return a + b
 
 def bar(x, y):
     return x + y
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_eq!(
-        units[0].fingerprint, units[1].fingerprint,
-        "Functions with renamed variables should have the same fingerprint"
+",
+        FingerprintExpectation::Same,
+        "Functions with renamed variables should have the same fingerprint",
     );
 }
 
 #[test]
 fn break_and_continue_have_different_fingerprints() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def with_break(items):
     for x in items:
         if x > 10:
@@ -208,19 +263,16 @@ def with_continue(items):
         if x > 10:
             continue
     return x
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "break and continue should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "break and continue should produce different fingerprints",
     );
 }
 
 #[test]
 fn none_literal_distinguished_from_bool() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def returns_none(x):
     y = None
     return y
@@ -228,19 +280,16 @@ def returns_none(x):
 def returns_true(x):
     y = True
     return y
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "None and True should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "None and True should produce different fingerprints",
     );
 }
 
 #[test]
 fn augmented_assignment_operators_distinguished() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def add_assign(a, b):
     a += b
     return a
@@ -248,19 +297,16 @@ def add_assign(a, b):
 def sub_assign(a, b):
     a -= b
     return a
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "+= and -= should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "+= and -= should produce different fingerprints",
     );
 }
 
 #[test]
 fn comparison_operators_preserve_operands() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def check_eq(a, b):
     if a == b:
         return a
@@ -270,19 +316,16 @@ def check_lt(a, b):
     if a < b:
         return a
     return b
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "== and < should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "== and < should produce different fingerprints",
     );
 }
 
 #[test]
 fn tuple_and_list_distinguished() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def make_tuple(a, b):
     x = (a, b)
     return x
@@ -290,12 +333,9 @@ def make_tuple(a, b):
 def make_list(a, b):
     x = [a, b]
     return x
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "Tuple and list should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "Tuple and list should produce different fingerprints",
     );
 }
 
@@ -303,18 +343,11 @@ def make_list(a, b):
 
 #[test]
 fn respects_min_nodes() {
-    let analyzer = PythonAnalyzer::new();
     let config = AnalysisConfig {
         min_nodes: 100,
         min_lines: 1,
     };
-    let units = analyzer
-        .parse_file(
-            &PathBuf::from("test.py"),
-            "def tiny():\n    pass\n",
-            &config,
-        )
-        .expect("parse should succeed");
+    let units = parse_with_config("def tiny():\n    pass\n", &config);
     assert!(
         units.is_empty(),
         "Small function should be filtered by min_nodes"
@@ -323,18 +356,11 @@ fn respects_min_nodes() {
 
 #[test]
 fn respects_min_lines() {
-    let analyzer = PythonAnalyzer::new();
     let config = AnalysisConfig {
         min_nodes: 1,
         min_lines: 10,
     };
-    let units = analyzer
-        .parse_file(
-            &PathBuf::from("test.py"),
-            "def short():\n    return 1\n",
-            &config,
-        )
-        .expect("parse should succeed");
+    let units = parse_with_config("def short():\n    return 1\n", &config);
     assert!(
         units.is_empty(),
         "Short function should be filtered by min_lines"
@@ -375,14 +401,14 @@ fn syntax_error_does_not_panic() {
 #[test]
 fn decorated_functions_are_parsed() {
     let units = parse(
-        r#"
+        r"
 @some_decorator
 def decorated(x):
     return x * 2
 
 def plain(x):
     return x * 2
-"#,
+",
     );
     assert_eq!(units.len(), 2);
     // Decorators are skipped in normalization, so these should have the same fingerprint
@@ -402,8 +428,8 @@ fn pyi_stub_file_parses() {
 
 #[test]
 fn chained_comparison_preserves_all_operands() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def chained(a, b, c):
     if a < b < c:
         return a
@@ -413,19 +439,16 @@ def simple(a, b, c):
     if a < c:
         return a
     return c
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "a < b < c and a < c should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "a < b < c and a < c should produce different fingerprints",
     );
 }
 
 #[test]
 fn set_and_list_distinguished() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def make_set(a, b):
     x = {a, b}
     return x
@@ -433,48 +456,39 @@ def make_set(a, b):
 def make_list(a, b):
     x = [a, b]
     return x
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "Set and list should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "Set and list should produce different fingerprints",
     );
 }
 
 #[test]
 fn floor_div_and_regular_div_different_fingerprint() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def floor_div(a, b):
     return a // b
 
 def regular_div(a, b):
     return a / b
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "// and / should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "// and / should produce different fingerprints",
     );
 }
 
 #[test]
 fn pow_and_mul_different_fingerprint() {
-    let units = parse(
-        r#"
+    assert_two_unit_fingerprints(
+        r"
 def power(a, b):
     return a ** b
 
 def multiply(a, b):
     return a * b
-"#,
-    );
-    assert_eq!(units.len(), 2);
-    assert_ne!(
-        units[0].fingerprint, units[1].fingerprint,
-        "** and * should produce different fingerprints"
+",
+        FingerprintExpectation::Different,
+        "** and * should produce different fingerprints",
     );
 }
 
@@ -483,15 +497,12 @@ def multiply(a, b):
 #[test]
 fn extracts_lambdas() {
     let units = parse(
-        r#"
+        r"
 f = lambda x: x + 1
 g = lambda y: y * 2
-"#,
+",
     );
-    let lambdas: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Closure)
-        .collect();
+    let lambdas = units_of_kind(&units, &CodeUnitKind::Closure);
     assert_eq!(lambdas.len(), 2, "Should extract two lambda expressions");
     assert!(
         lambdas[0].name.contains("anonymous"),
@@ -502,39 +513,27 @@ g = lambda y: y * 2
 
 #[test]
 fn duplicate_lambdas_same_fingerprint() {
-    let units = parse(
-        r#"
+    assert_kind_fingerprints(
+        r"
 f = lambda x: x + 1
 g = lambda y: y + 1
-"#,
-    );
-    let lambdas: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Closure)
-        .collect();
-    assert_eq!(lambdas.len(), 2);
-    assert_eq!(
-        lambdas[0].fingerprint, lambdas[1].fingerprint,
-        "Structurally identical lambdas should have the same fingerprint"
+",
+        &CodeUnitKind::Closure,
+        FingerprintExpectation::Same,
+        "Structurally identical lambdas should have the same fingerprint",
     );
 }
 
 #[test]
 fn different_lambdas_different_fingerprint() {
-    let units = parse(
-        r#"
+    assert_kind_fingerprints(
+        r"
 f = lambda x: x + 1
 g = lambda x: x * 2
-"#,
-    );
-    let lambdas: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Closure)
-        .collect();
-    assert_eq!(lambdas.len(), 2);
-    assert_ne!(
-        lambdas[0].fingerprint, lambdas[1].fingerprint,
-        "Structurally different lambdas should have different fingerprints"
+",
+        &CodeUnitKind::Closure,
+        FingerprintExpectation::Different,
+        "Structurally different lambdas should have different fingerprints",
     );
 }
 
@@ -543,24 +542,21 @@ g = lambda x: x * 2
 #[test]
 fn extracts_class_bodies() {
     let units = parse(
-        r#"
+        r"
 class Foo:
     def method(self):
         return 1
-"#,
+",
     );
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
+    let classes = units_of_kind(&units, &CodeUnitKind::Class);
     assert_eq!(classes.len(), 1, "Should extract one class definition");
     assert_eq!(classes[0].name, "Foo");
 }
 
 #[test]
 fn duplicate_classes_same_fingerprint() {
-    let units = parse(
-        r#"
+    assert_kind_fingerprints(
+        r"
 class Foo:
     def method(self):
         return self + 1
@@ -568,43 +564,30 @@ class Foo:
 class Bar:
     def method(self):
         return self + 1
-"#,
-    );
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
-    assert_eq!(classes.len(), 2);
-    assert_eq!(
-        classes[0].fingerprint, classes[1].fingerprint,
-        "Structurally identical classes should have the same fingerprint"
+",
+        &CodeUnitKind::Class,
+        FingerprintExpectation::Same,
+        "Structurally identical classes should have the same fingerprint",
     );
 }
 
 #[test]
 fn class_methods_still_extracted_separately() {
     let units = parse(
-        r#"
+        r"
 class MyClass:
     def method_a(self, x):
         return x + 1
 
     def method_b(self, x):
         return x * 2
-"#,
+",
     );
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
-    let functions: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Function)
-        .collect();
-    assert_eq!(classes.len(), 1, "Should extract the class itself");
+    let class_count = units_of_kind(&units, &CodeUnitKind::Class).len();
+    let function_count = units_of_kind(&units, &CodeUnitKind::Function).len();
+    assert_eq!(class_count, 1, "Should extract the class itself");
     assert_eq!(
-        functions.len(),
-        2,
+        function_count, 2,
         "Should extract both methods as Function units"
     );
 }
@@ -612,16 +595,13 @@ class MyClass:
 #[test]
 fn test_class_detected_as_test() {
     let units = parse(
-        r#"
+        r"
 class TestCalculator:
     def test_add(self):
         assert 1 + 1 == 2
-"#,
+",
     );
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
+    let classes = units_of_kind(&units, &CodeUnitKind::Class);
     assert_eq!(classes.len(), 1);
     assert!(
         classes[0].is_test,
@@ -633,96 +613,63 @@ class TestCalculator:
 
 #[test]
 fn lambda_with_no_parameters() {
-    let units = parse(
-        r#"
+    assert_kind_fingerprints(
+        r"
 f = lambda: 42
 g = lambda: 99
-"#,
-    );
-    let lambdas: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Closure)
-        .collect();
-    assert_eq!(
-        lambdas.len(),
-        2,
-        "Lambdas with no parameters should be extracted"
-    );
-    // Both return a literal (Int), so they have the same fingerprint
-    assert_eq!(
-        lambdas[0].fingerprint, lambdas[1].fingerprint,
-        "Parameterless lambdas with same structure should match"
+",
+        &CodeUnitKind::Closure,
+        FingerprintExpectation::Same,
+        "Parameterless lambdas with same structure should match",
     );
 }
 
 #[test]
 fn lambda_with_multiple_parameters() {
-    let units = parse(
-        r#"
+    assert_kind_fingerprints(
+        r"
 f = lambda x, y: x + y
 g = lambda a, b: a + b
-"#,
-    );
-    let lambdas: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Closure)
-        .collect();
-    assert_eq!(lambdas.len(), 2);
-    assert_eq!(
-        lambdas[0].fingerprint, lambdas[1].fingerprint,
-        "Lambdas with renamed multi-params and same body should match"
+",
+        &CodeUnitKind::Closure,
+        FingerprintExpectation::Same,
+        "Lambdas with renamed multi-params and same body should match",
     );
 }
 
 #[test]
 fn lambda_inside_function_extracted() {
     let units = parse(
-        r#"
+        r"
 def outer(items):
     result = list(map(lambda x: x + 1, items))
     return result
-"#,
+",
     );
-    let lambdas: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Closure)
-        .collect();
-    assert!(
-        !lambdas.is_empty(),
-        "Lambda inside a function should be extracted"
-    );
+    let has_lambda = units.iter().any(|u| u.kind == CodeUnitKind::Closure);
+    assert!(has_lambda, "Lambda inside a function should be extracted");
 }
 
 // -- Class edge cases --
 
 #[test]
 fn empty_class_body_respects_min_nodes() {
-    let analyzer = PythonAnalyzer::new();
     let config = AnalysisConfig {
         min_nodes: 100,
         min_lines: 1,
     };
-    let units = analyzer
-        .parse_file(
-            &PathBuf::from("test.py"),
-            "class Empty:\n    pass\n",
-            &config,
-        )
-        .expect("parse should succeed");
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
+    let units = parse_with_config("class Empty:\n    pass\n", &config);
+    let has_class = units.iter().any(|u| u.kind == CodeUnitKind::Class);
     assert!(
-        classes.is_empty(),
+        !has_class,
         "Empty class should be filtered by high min_nodes"
     );
 }
 
 #[test]
 fn decorated_class_same_fingerprint_as_plain() {
-    let units = parse(
-        r#"
+    assert_kind_fingerprints(
+        r"
 @some_decorator
 class Foo:
     def method(self):
@@ -731,35 +678,26 @@ class Foo:
 class Bar:
     def method(self):
         return self + 1
-"#,
-    );
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
-    assert_eq!(classes.len(), 2);
-    assert_eq!(
-        classes[0].fingerprint, classes[1].fingerprint,
-        "Decorated and plain classes with same body should have same fingerprint"
+",
+        &CodeUnitKind::Class,
+        FingerprintExpectation::Same,
+        "Decorated and plain classes with same body should have same fingerprint",
     );
 }
 
 #[test]
 fn nested_class_extraction() {
     let units = parse(
-        r#"
+        r"
 class Outer:
     class Inner:
         def method(self):
             return 1
     def outer_method(self):
         return 2
-"#,
+",
     );
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
+    let classes = units_of_kind(&units, &CodeUnitKind::Class);
     assert!(
         classes.len() >= 2,
         "Both outer and inner classes should be extracted, got {}",
@@ -770,16 +708,13 @@ class Outer:
 #[test]
 fn class_with_inheritance_extracted() {
     let units = parse(
-        r#"
+        r"
 class Child(Parent):
     def method(self):
         return self + 1
-"#,
+",
     );
-    let classes: Vec<_> = units
-        .iter()
-        .filter(|u| u.kind == dupes_core::code_unit::CodeUnitKind::Class)
-        .collect();
+    let classes = units_of_kind(&units, &CodeUnitKind::Class);
     assert_eq!(classes.len(), 1);
     assert_eq!(classes[0].name, "Child");
 }

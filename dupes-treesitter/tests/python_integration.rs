@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use dupes_core::code_unit::CodeUnitKind;
+use dupes_core::code_unit::{CodeUnit, CodeUnitKind};
 use dupes_core::config::AnalysisConfig;
 use dupes_core::node::{
     BinOpKind, LiteralKind, NodeKind, NormalizationContext, NormalizedNode, PlaceholderKind,
@@ -9,10 +9,20 @@ use dupes_core::node::{
 use dupes_treesitter::mapping::NodeMapping;
 use dupes_treesitter::normalizer::normalize_ts_node;
 
+const FUNCTION_QUERY: &str = r"
+    (function_definition
+        name: (identifier) @name
+        parameters: (parameters) @parameters
+        body: (block) @body
+    ) @definition
+    ";
+
+// jscpd:ignore-start
+
 /// Build a minimal Python `NodeMapping` for testing the tree-sitter normalization layer.
 ///
 /// NOTE: The production Python mapping lives in `dupes_python::python_mapping()` and is
-/// more comprehensive (augmented assignments, containers, node_kinds for break/continue/
+/// more comprehensive (augmented assignments, containers, `node_kinds` for break/continue/
 /// await/yield, etc.). This test-only version covers just enough for normalizer unit tests.
 fn python_mapping() -> NodeMapping {
     NodeMapping::new()
@@ -70,6 +80,8 @@ fn python_mapping() -> NodeMapping {
         ])
 }
 
+// jscpd:ignore-end
+
 /// Parse Python source and return the tree.
 fn parse_python(source: &str) -> tree_sitter::Tree {
     let mut parser = tree_sitter::Parser::new();
@@ -80,32 +92,94 @@ fn parse_python(source: &str) -> tree_sitter::Tree {
     parser.parse(source, None).expect("Failed to parse")
 }
 
-/// Normalize a Python function body (first function_definition's body block).
+fn find_body(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
+    if node.kind() == "function_definition" {
+        return node.child_by_field_name("body");
+    }
+    let cursor = &mut node.walk();
+    for child in node.named_children(cursor) {
+        if let Some(body) = find_body(child) {
+            return Some(body);
+        }
+    }
+    None
+}
+
+fn find_first_named_expression(node: tree_sitter::Node) -> tree_sitter::Node {
+    let cursor = &mut node.walk();
+    node.named_children(cursor)
+        .next()
+        .and_then(|n| {
+            let c = &mut n.walk();
+            n.named_children(c).next()
+        })
+        .unwrap_or(node)
+}
+
+fn contains_kind(node: &NormalizedNode, kind: &NodeKind) -> bool {
+    if &node.kind == kind {
+        return true;
+    }
+    node.children.iter().any(|child| contains_kind(child, kind))
+}
+
+/// Normalize a Python function body (first `function_definition`'s body block).
 fn normalize_python_body(source: &str) -> NormalizedNode {
     let tree = parse_python(source);
     let mapping = python_mapping();
     let mut ctx = NormalizationContext::new();
     let root = tree.root_node();
 
-    // Find first function_definition, then its body
-    fn find_body(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
-        if node.kind() == "function_definition" {
-            return node.child_by_field_name("body");
-        }
-        let cursor = &mut node.walk();
-        for child in node.named_children(cursor) {
-            if let Some(body) = find_body(child) {
-                return Some(body);
-            }
-        }
-        None
-    }
-
     let body = find_body(root).expect("No function body found");
     normalize_ts_node(body, source.as_bytes(), &mapping, &mut ctx)
 }
 
+fn function_query() -> tree_sitter::Query {
+    let language = tree_sitter_python::LANGUAGE;
+    tree_sitter::Query::new(&language.into(), FUNCTION_QUERY).expect("Invalid query")
+}
+
+const fn config(min_nodes: usize, min_lines: usize) -> AnalysisConfig {
+    AnalysisConfig {
+        min_nodes,
+        min_lines,
+    }
+}
+
+fn extract_functions(source: &str, config: &AnalysisConfig) -> Vec<CodeUnit> {
+    let tree = parse_python(source);
+    let mapping = python_mapping();
+    let query = function_query();
+
+    dupes_treesitter::extract_code_units(
+        &tree,
+        source.as_bytes(),
+        &PathBuf::from("test.py"),
+        &query,
+        &mapping,
+        config,
+        |_| CodeUnitKind::Function,
+        |_, _| false,
+    )
+}
+
+fn assert_normalized_bodies_equal(source_a: &str, source_b: &str) {
+    assert_eq!(
+        normalize_python_body(source_a),
+        normalize_python_body(source_b)
+    );
+}
+
+fn assert_normalized_bodies_differ(source_a: &str, source_b: &str) {
+    assert_ne!(
+        normalize_python_body(source_a),
+        normalize_python_body(source_b)
+    );
+}
+
 // -- Tests --
+
+// jscpd:ignore-start
 
 #[test]
 fn identifier_normalization() {
@@ -118,7 +192,7 @@ fn identifier_normalization() {
     // The root is "module", and its first named child is "expression_statement" or "assignment"
     let cursor = &mut root.walk();
     let first_stmt = root.named_children(cursor).next().unwrap();
-    let node = normalize_ts_node(first_stmt, "x = 1\n".as_bytes(), &mapping, &mut ctx);
+    let node = normalize_ts_node(first_stmt, b"x = 1\n", &mapping, &mut ctx);
 
     assert_eq!(node.kind, NodeKind::Assign);
     assert_eq!(node.children.len(), 2);
@@ -129,16 +203,15 @@ fn identifier_normalization() {
     assert_eq!(node.children[1].kind, NodeKind::Literal(LiteralKind::Int));
 }
 
+// jscpd:ignore-end
+
 #[test]
 fn renamed_variables_produce_identical_bodies() {
     let source_a = "def foo(a, b):\n    return a + b\n";
     let source_b = "def bar(x, y):\n    return x + y\n";
 
-    let body_a = normalize_python_body(source_a);
-    let body_b = normalize_python_body(source_b);
-
     // Both should produce the same normalized body since variables are positional
-    assert_eq!(body_a, body_b);
+    assert_normalized_bodies_equal(source_a, source_b);
 }
 
 #[test]
@@ -146,10 +219,7 @@ fn different_structure_produces_different_trees() {
     let source_add = "def foo(a, b):\n    return a + b\n";
     let source_mul = "def foo(a, b):\n    return a * b\n";
 
-    let body_add = normalize_python_body(source_add);
-    let body_mul = normalize_python_body(source_mul);
-
-    assert_ne!(body_add, body_mul);
+    assert_normalized_bodies_differ(source_add, source_mul);
 }
 
 #[test]
@@ -161,28 +231,18 @@ fn literal_kind_preserved_value_erased() {
     let mut ctx42 = NormalizationContext::new();
     let mut ctx99 = NormalizationContext::new();
 
-    // Find the integer node in each
-    fn find_first_named(node: tree_sitter::Node) -> tree_sitter::Node {
-        let cursor = &mut node.walk();
-        node.named_children(cursor)
-            .next()
-            .and_then(|n| {
-                let c = &mut n.walk();
-                n.named_children(c).next()
-            })
-            .unwrap_or(node)
-    }
+    let int42 = find_first_named_expression(tree42.root_node());
+    let int99 = find_first_named_expression(tree99.root_node());
 
-    let int42 = find_first_named(tree42.root_node());
-    let int99 = find_first_named(tree99.root_node());
-
-    let norm42 = normalize_ts_node(int42, "42\n".as_bytes(), &mapping, &mut ctx42);
-    let norm99 = normalize_ts_node(int99, "99\n".as_bytes(), &mapping, &mut ctx99);
+    let norm42 = normalize_ts_node(int42, b"42\n", &mapping, &mut ctx42);
+    let norm99 = normalize_ts_node(int99, b"99\n", &mapping, &mut ctx99);
 
     assert_eq!(norm42.kind, NodeKind::Literal(LiteralKind::Int));
     assert_eq!(norm99.kind, NodeKind::Literal(LiteralKind::Int));
     assert_eq!(norm42, norm99);
 }
+
+// jscpd:ignore-start
 
 #[test]
 fn binary_operator_detection() {
@@ -209,6 +269,8 @@ fn binary_operator_detection() {
     );
 }
 
+// jscpd:ignore-end
+
 #[test]
 fn if_else_normalization() {
     let source = "if x:\n    y = 1\nelse:\n    y = 2\n";
@@ -228,7 +290,7 @@ fn if_else_normalization() {
 
 #[test]
 fn code_unit_extraction() {
-    let source = r#"
+    let source = r"
 def add(a, b):
     result = a + b
     return result
@@ -236,37 +298,8 @@ def add(a, b):
 def subtract(a, b):
     result = a - b
     return result
-"#;
-    let tree = parse_python(source);
-    let mapping = python_mapping();
-    let language = tree_sitter_python::LANGUAGE;
-    let query = tree_sitter::Query::new(
-        &language.into(),
-        r#"
-        (function_definition
-            name: (identifier) @name
-            parameters: (parameters) @parameters
-            body: (block) @body
-        ) @definition
-        "#,
-    )
-    .expect("Invalid query");
-
-    let config = AnalysisConfig {
-        min_nodes: 1,
-        min_lines: 1,
-    };
-
-    let units = dupes_treesitter::extract_code_units(
-        &tree,
-        source.as_bytes(),
-        &PathBuf::from("test.py"),
-        &query,
-        &mapping,
-        &config,
-        |_| CodeUnitKind::Function,
-        |_, _| false,
-    );
+";
+    let units = extract_functions(source, &config(1, 1));
 
     assert_eq!(units.len(), 2);
     assert_eq!(units[0].name, "add");
@@ -278,36 +311,7 @@ def subtract(a, b):
 #[test]
 fn min_nodes_filter() {
     let source = "def tiny():\n    pass\n";
-    let tree = parse_python(source);
-    let mapping = python_mapping();
-    let language = tree_sitter_python::LANGUAGE;
-    let query = tree_sitter::Query::new(
-        &language.into(),
-        r#"
-        (function_definition
-            name: (identifier) @name
-            parameters: (parameters) @parameters
-            body: (block) @body
-        ) @definition
-        "#,
-    )
-    .expect("Invalid query");
-
-    let config = AnalysisConfig {
-        min_nodes: 100, // Very high threshold
-        min_lines: 1,
-    };
-
-    let units = dupes_treesitter::extract_code_units(
-        &tree,
-        source.as_bytes(),
-        &PathBuf::from("test.py"),
-        &query,
-        &mapping,
-        &config,
-        |_| CodeUnitKind::Function,
-        |_, _| false,
-    );
+    let units = extract_functions(source, &config(100, 1));
 
     assert!(
         units.is_empty(),
@@ -318,36 +322,7 @@ fn min_nodes_filter() {
 #[test]
 fn min_lines_filter() {
     let source = "def one_liner(): return 1\n";
-    let tree = parse_python(source);
-    let mapping = python_mapping();
-    let language = tree_sitter_python::LANGUAGE;
-    let query = tree_sitter::Query::new(
-        &language.into(),
-        r#"
-        (function_definition
-            name: (identifier) @name
-            parameters: (parameters) @parameters
-            body: (block) @body
-        ) @definition
-        "#,
-    )
-    .expect("Invalid query");
-
-    let config = AnalysisConfig {
-        min_nodes: 1,
-        min_lines: 5, // Requires 5+ lines
-    };
-
-    let units = dupes_treesitter::extract_code_units(
-        &tree,
-        source.as_bytes(),
-        &PathBuf::from("test.py"),
-        &query,
-        &mapping,
-        &config,
-        |_| CodeUnitKind::Function,
-        |_, _| false,
-    );
+    let units = extract_functions(source, &config(1, 5));
 
     assert!(
         units.is_empty(),
@@ -357,7 +332,7 @@ fn min_lines_filter() {
 
 #[test]
 fn duplicate_fingerprints() {
-    let source = r#"
+    let source = r"
 def add(a, b):
     result = a + b
     return result
@@ -365,37 +340,8 @@ def add(a, b):
 def add2(x, y):
     result = x + y
     return result
-"#;
-    let tree = parse_python(source);
-    let mapping = python_mapping();
-    let language = tree_sitter_python::LANGUAGE;
-    let query = tree_sitter::Query::new(
-        &language.into(),
-        r#"
-        (function_definition
-            name: (identifier) @name
-            parameters: (parameters) @parameters
-            body: (block) @body
-        ) @definition
-        "#,
-    )
-    .expect("Invalid query");
-
-    let config = AnalysisConfig {
-        min_nodes: 1,
-        min_lines: 1,
-    };
-
-    let units = dupes_treesitter::extract_code_units(
-        &tree,
-        source.as_bytes(),
-        &PathBuf::from("test.py"),
-        &query,
-        &mapping,
-        &config,
-        |_| CodeUnitKind::Function,
-        |_, _| false,
-    );
+";
+    let units = extract_functions(source, &config(1, 1));
 
     assert_eq!(units.len(), 2);
     assert_eq!(
@@ -406,43 +352,14 @@ def add2(x, y):
 
 #[test]
 fn different_fingerprints() {
-    let source = r#"
+    let source = r"
 def add(a, b):
     return a + b
 
 def mul(a, b):
     return a * b
-"#;
-    let tree = parse_python(source);
-    let mapping = python_mapping();
-    let language = tree_sitter_python::LANGUAGE;
-    let query = tree_sitter::Query::new(
-        &language.into(),
-        r#"
-        (function_definition
-            name: (identifier) @name
-            parameters: (parameters) @parameters
-            body: (block) @body
-        ) @definition
-        "#,
-    )
-    .expect("Invalid query");
-
-    let config = AnalysisConfig {
-        min_nodes: 1,
-        min_lines: 1,
-    };
-
-    let units = dupes_treesitter::extract_code_units(
-        &tree,
-        source.as_bytes(),
-        &PathBuf::from("test.py"),
-        &query,
-        &mapping,
-        &config,
-        |_| CodeUnitKind::Function,
-        |_, _| false,
-    );
+";
+    let units = extract_functions(source, &config(1, 1));
 
     assert_eq!(units.len(), 2);
     assert_ne!(
@@ -464,16 +381,8 @@ fn error_node_becomes_opaque() {
     assert!(root.has_error(), "Test source should trigger parse errors");
     let node = normalize_ts_node(root, source.as_bytes(), &mapping, &mut ctx);
 
-    // The tree should contain Opaque nodes for error parts
-    fn contains_opaque(node: &NormalizedNode) -> bool {
-        if node.kind == NodeKind::Opaque {
-            return true;
-        }
-        node.children.iter().any(contains_opaque)
-    }
-
     assert!(
-        contains_opaque(&node),
+        contains_kind(&node, &NodeKind::Opaque),
         "Malformed source should produce at least one Opaque node"
     );
 }
@@ -526,6 +435,8 @@ fn while_loop_normalization() {
     assert_eq!(node.children.len(), 2); // condition, body
 }
 
+// jscpd:ignore-start
+
 #[test]
 fn for_loop_normalization() {
     let source = "for x in items:\n    print(x)\n";
@@ -555,15 +466,10 @@ fn node_kinds_mapping_produces_correct_kind() {
     assert_eq!(node.kind, NodeKind::ForLoop);
     // body is the third child; the break statement should be inside the body block
     let body = &node.children[2];
-    // The body block should contain a Break node
-    fn find_break(node: &NormalizedNode) -> bool {
-        if node.kind == NodeKind::Break {
-            return true;
-        }
-        node.children.iter().any(find_break)
-    }
     assert!(
-        find_break(body),
+        contains_kind(body, &NodeKind::Break),
         "break_statement should be normalized to NodeKind::Break via node_kinds mapping"
     );
 }
+
+// jscpd:ignore-end

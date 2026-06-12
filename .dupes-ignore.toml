@@ -1,199 +1,2480 @@
 [[ignore]]
-fingerprint = "9d043e01e8ef1d6a"
-reason = "test fixture: exact_dupes/near_dupes/mixed"
+fingerprint = "52c51137691cd7c9"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "duplicate_functions_same_fingerprint (dupes-python/tests/integration.rs:206-220)",
+    "different_functions_different_fingerprint (dupes-python/tests/integration.rs:223-235)",
+    "renamed_variables_same_fingerprint (dupes-python/tests/integration.rs:238-250)",
+    "break_and_continue_have_different_fingerprints (dupes-python/tests/integration.rs:253-271)",
+    "none_literal_distinguished_from_bool (dupes-python/tests/integration.rs:274-288)",
+    "augmented_assignment_operators_distinguished (dupes-python/tests/integration.rs:291-305)",
+    "comparison_operators_preserve_operands (dupes-python/tests/integration.rs:308-324)",
+    "tuple_and_list_distinguished (dupes-python/tests/integration.rs:327-341)",
+    "chained_comparison_preserves_all_operands (dupes-python/tests/integration.rs:431-447)",
+    "set_and_list_distinguished (dupes-python/tests/integration.rs:450-464)",
+    "floor_div_and_regular_div_different_fingerprint (dupes-python/tests/integration.rs:467-479)",
+    "pow_and_mul_different_fingerprint (dupes-python/tests/integration.rs:482-494)",
+]
+member_fingerprints = ["318c5bf969951464"]
 
 [[ignore]]
-fingerprint = "3241d116a0363e38"
-reason = "test fixture: test_code"
+fingerprint = "4a9da5973e625023"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "identical_trees_score_one (dupes-rust/tests/core_with_syn_tests.rs:137-143)",
+    "empty_trees_score_one (dupes-rust/tests/core_with_syn_tests.rs:173-176)",
+    "simple_expr_identical (dupes-rust/tests/core_with_syn_tests.rs:179-182)",
+    "near_duplicate_complex_fn (dupes-rust/tests/core_with_syn_tests.rs:192-218)",
+    "method_call_similarity (dupes-rust/tests/core_with_syn_tests.rs:243-246)",
+    "closure_similarity (dupes-rust/tests/core_with_syn_tests.rs:249-252)",
+    "same_macro_same_args_score_one (dupes-rust/tests/core_with_syn_tests.rs:255-258)",
+]
+member_fingerprints = ["0271c1a4e62fc2ed"]
 
 [[ignore]]
-fingerprint = "35d7bbf875d69b65"
-reason = "test fixture: near_dupes/mixed"
+fingerprint = "5fc6cf1c29f7707a"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "duplicate_lambdas_same_fingerprint (dupes-python/tests/integration.rs:516-526)",
+    "different_lambdas_different_fingerprint (dupes-python/tests/integration.rs:529-539)",
+    "duplicate_classes_same_fingerprint (dupes-python/tests/integration.rs:558-573)",
+    "lambda_with_no_parameters (dupes-python/tests/integration.rs:616-626)",
+    "lambda_with_multiple_parameters (dupes-python/tests/integration.rs:629-639)",
+    "decorated_class_same_fingerprint_as_plain (dupes-python/tests/integration.rs:671-687)",
+]
+member_fingerprints = ["4ac8ca6fa4f173bb"]
 
 [[ignore]]
-fingerprint = "ea5a385f020ab6cc"
-reason = "test fixture: sub_function_dupes"
-
-[[ignore]]
-fingerprint = "2f17a55c8404d2d1"
-reason = "trait impl: JsonReporter report methods delegate to write_groups"
-
-[[ignore]]
-fingerprint = "950599759e10fecc"
-reason = "normalizer: path segment map closures with different PlaceholderKind"
-
-[[ignore]]
-fingerprint = "03f8a91b6e33b28f"
-reason = "trivial: one-line closures in grouper"
-
-[[ignore]]
-fingerprint = "46619205d3947fbe"
-reason = "trait impl: TextReporter report_exact/report_near"
-
-[[ignore]]
-fingerprint = "5f0f36bdba897816"
-reason = "trivial: Reporter::new constructors"
-
-[[ignore]]
-fingerprint = "6283b4c6363ef530"
-reason = "trivial: one-line closures in grouper"
-
-[[ignore]]
-fingerprint = "b039d7c0273a4a59"
-reason = "test helper: make_unit duplicated in json/text test modules"
-
-[[ignore]]
-fingerprint = "d5fd03705d63f6dc"
-reason = "API wrappers: normalize_item_fn/normalize_impl_item_fn for different syn types"
-
-[[ignore]]
-fingerprint = "d9f4c17f4a8c99a2"
-reason = "trait impl: TextReporter report_sub_exact/report_sub_near"
-
-[[ignore]]
-fingerprint = "dc7844f7ba7fe3be"
-reason = "API methods: exact_duplicate_percent/near_duplicate_percent on different fields"
-
-[[ignore]]
-fingerprint = "1211ef2e82ce5671"
-reason = "test pattern: similarity score tests in core_with_syn"
-
-[[ignore]]
-fingerprint = "117b75316a5f7731"
+fingerprint = "77a5b1cc588e6e0f"
 reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "cast_expression_normalized (dupes-rust/src/normalizer/tests.rs:217-220)",
+    "index_expression_normalized (dupes-rust/src/normalizer/tests.rs:223-226)",
+    "await_expression_normalized (dupes-rust/src/normalizer/tests.rs:229-232)",
+    "try_expression_normalized (dupes-rust/src/normalizer/tests.rs:235-238)",
+    "assign_expression_normalized (dupes-rust/src/normalizer/tests.rs:414-417)",
+    "field_access_normalized (dupes-rust/src/normalizer/tests.rs:447-450)",
+]
+member_fingerprints = ["1b08ed1655e59b86"]
 
 [[ignore]]
-fingerprint = "9b92128d1de77deb"
+fingerprint = "c119b5926910dad0"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "integer_literal (dupes-treesitter/src/normalizer.rs:577-587)",
+    "string_literal (dupes-treesitter/src/normalizer.rs:590-600)",
+    "binary_eq (dupes-treesitter/src/normalizer.rs:634-644)",
+    "boolean_and (dupes-treesitter/src/normalizer.rs:647-657)",
+    "unknown_binary_op_falls_back_to_other (dupes-treesitter/src/normalizer.rs:660-670)",
+    "unary_neg (dupes-treesitter/src/normalizer.rs:687-697)",
+]
+member_fingerprints = ["1d9c1e0d5a683455"]
+
+[[ignore]]
+fingerprint = "4abe37789422627b"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "binary_ops_preserved (dupes-rust/src/normalizer/tests.rs:80-84)",
+    "reference_expressions_normalized (dupes-rust/src/normalizer/tests.rs:195-199)",
+    "different_macro_names_produce_different_nodes (dupes-rust/src/normalizer/tests.rs:299-303)",
+    "same_macro_different_arg_count_are_different (dupes-rust/src/normalizer/tests.rs:313-317)",
+    "unary_ops_preserved (dupes-rust/src/normalizer/tests.rs:453-457)",
+]
+member_fingerprints = ["efd8335f8c071e08"]
+
+[[ignore]]
+fingerprint = "67228d5cdd90aab5"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "multi_segment_expression_paths_are_path_nodes (dupes-rust/src/normalizer/tests.rs:64-68)",
+    "array_expression_normalized (dupes-rust/src/normalizer/tests.rs:433-437)",
+    "tuple_expression_normalized (dupes-rust/src/normalizer/tests.rs:440-444)",
+    "paren_expression_normalized (dupes-rust/src/normalizer/tests.rs:487-491)",
+    "repeat_expression_normalized (dupes-rust/src/normalizer/tests.rs:494-498)",
+]
+member_fingerprints = ["1563bd2f3533182a"]
+
+[[ignore]]
+fingerprint = "c01b2514dac0ac37"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "method_calls_normalized (dupes-rust/src/normalizer/tests.rs:87-93)",
+    "if_else_structure_preserved (dupes-rust/src/normalizer/tests.rs:127-133)",
+    "closures_normalized (dupes-rust/src/normalizer/tests.rs:155-161)",
+    "for_loops_normalized (dupes-rust/src/normalizer/tests.rs:164-170)",
+    "while_loop_normalized (dupes-rust/src/normalizer/tests.rs:398-404)",
+]
+member_fingerprints = ["517c5f277cc87b98"]
+
+[[ignore]]
+fingerprint = "2983e3dc706f2fb1"
+reason = "test helper: normalized-node builders duplicated across core test modules"
+members = [
+    "block (dupes-core/src/lib.rs:1335-1337)",
+    "block (dupes-core/src/extractor.rs:623-625)",
+    "call (dupes-core/src/extractor.rs:700-702)",
+    "method_call (dupes-core/src/extractor.rs:747-749)",
+]
+member_fingerprints = ["1bda1d8858f84a8b"]
+
+[[ignore]]
+fingerprint = "390b4760d53aee1b"
+reason = "test pattern: parse-assert idiom shared across dupes-rust test modules"
+members = [
+    "parse_expr (dupes-rust/src/normalizer/tests.rs:3-5)",
+    "parse_fn (dupes-rust/src/normalizer/tests.rs:7-9)",
+    "parse_fn (dupes-rust/tests/core_with_syn_tests.rs:19-21)",
+    "parse_expr (dupes-rust/tests/core_with_syn_tests.rs:23-25)",
+]
+member_fingerprints = ["a383b5692c2b33b0"]
+
+[[ignore]]
+fingerprint = "bf951d9d10eb19f7"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "string_literals_are_equal (dupes-rust/src/normalizer/tests.rs:50-54)",
+    "bool_literals_normalize_as_placeholders (dupes-rust/src/normalizer/tests.rs:57-61)",
+    "same_macro_different_literal_values_are_equal (dupes-rust/src/normalizer/tests.rs:306-310)",
+    "return_expression_normalized (dupes-rust/src/normalizer/tests.rs:407-411)",
+]
+member_fingerprints = ["3b5bcb216aaabfbf"]
+
+[[ignore]]
+fingerprint = "1c38fd40be02e0be"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "completely_different_trees_score_low (dupes-rust/tests/core_with_syn_tests.rs:146-152)",
+    "structural_difference_low_score (dupes-rust/tests/core_with_syn_tests.rs:164-170)",
+    "if_vs_match_low_similarity (dupes-rust/tests/core_with_syn_tests.rs:234-240)",
+]
+member_fingerprints = ["fdd7096eb6b5feab"]
+
+[[ignore]]
+fingerprint = "3cde468ffb379134"
+reason = "trivial: two-field struct-literal constructors (Reporter::with_options, NormalizedNode::with_children)"
+members = [
+    "JsonReporter::with_options (dupes-core/src/output/json.rs:25-30)",
+    "TextReporter::with_options (dupes-core/src/output/text.rs:39-44)",
+    "NormalizedNode::with_children (dupes-core/src/node.rs:231-233)",
+]
+member_fingerprints = ["6b7990cfb0675935"]
+
+[[ignore]]
+fingerprint = "655693f555f4986f"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "extracts_if_branches (dupes-rust/tests/core_with_syn_tests.rs:482-492)",
+    "extracts_match_arms (dupes-rust/tests/core_with_syn_tests.rs:495-511)",
+    "extracts_loop_bodies (dupes-rust/tests/core_with_syn_tests.rs:514-523)",
+]
+member_fingerprints = ["2866ba827a319999"]
+
+[[ignore]]
+fingerprint = "8e2bee5659a7b198"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line_windows_preserve_substantive_text_blocks (dupes-core/src/text_units.rs:2001-2015)",
+    "line_windows_preserve_structured_data_blocks (dupes-core/src/text_units.rs:2018-2032)",
+    "line_windows_preserve_markdown_bullet_prose (dupes-core/src/text_units.rs:2035-2049)",
+]
+member_fingerprints = ["1f05dec80d0fa5c4"]
+
+[[ignore]]
+fingerprint = "cbfb3f909229e80b"
+reason = "test helper: normalized-node builders duplicated across core test modules"
+members = [
+    "int_lit (dupes-core/src/similarity.rs:57-59)",
+    "literal_int (dupes-core/src/lib.rs:1331-1333)",
+    "literal_int (dupes-core/src/extractor.rs:619-621)",
+]
+member_fingerprints = ["810525f3654a2920"]
+
+[[ignore]]
+fingerprint = "e9ed2a4cd57668ff"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "parses_top_level_functions (dupes-python/tests/integration.rs:73-86)",
+    "parses_nested_functions (dupes-python/tests/integration.rs:112-124)",
+    "parses_async_functions (dupes-python/tests/integration.rs:127-142)",
+]
+member_fingerprints = ["d1cea890da637340"]
+
+[[ignore]]
+fingerprint = "fc825d58b316e651"
+reason = "test helper: normalized-node builders duplicated across core test modules"
+members = [
+    "var (dupes-core/src/similarity.rs:53-55)",
+    "variable (dupes-core/src/lib.rs:1327-1329)",
+    "variable (dupes-core/src/extractor.rs:615-617)",
+]
+member_fingerprints = ["a82d42bc9b9279a3"]
+
+[[ignore]]
+fingerprint = "03bd5f41d28af027"
+reason = "API wrappers: normalize_while/normalize_assignment parameterize normalize_two_fields with different node kinds and field names"
+members = [
+    "normalize_while (dupes-treesitter/src/normalizer.rs:249-264)",
+    "normalize_assignment (dupes-treesitter/src/normalizer.rs:333-348)",
+]
+member_fingerprints = ["447f10573b8ad6c4"]
+
+[[ignore]]
+fingerprint = "0cff93a72b605633"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "token_windows_preserve_substantive_executable_code (dupes-core/src/text_units.rs:1887-1905)",
+    "token_windows_preserve_structured_data_blocks (dupes-core/src/text_units.rs:1908-1923)",
+]
+member_fingerprints = ["cdd2cdf4964db9af"]
+
+[[ignore]]
+fingerprint = "0ff8ea4eec11fc75"
+reason = "test pattern: treesitter bridge integration tests"
+members = [
+    "renamed_variables_produce_identical_bodies (dupes-treesitter/tests/python_integration.rs:201-207)",
+    "different_structure_produces_different_trees (dupes-treesitter/tests/python_integration.rs:210-215)",
+]
+member_fingerprints = ["fabbf3ebf53f3e13"]
+
+[[ignore]]
+fingerprint = "1b1d361664b7c0fa"
 reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "explicit_language_rust (code-dupes/tests/language.rs:67-69)",
+    "explicit_language_python (code-dupes/tests/language.rs:164-166)",
+]
+member_fingerprints = ["311851eeb3b63738"]
 
 [[ignore]]
-fingerprint = "4eb9cda3cd6f18e5"
-reason = "test pattern: normalizer parse-assert tests"
+fingerprint = "1b9476fe7ce94673"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "generic_groups_with_only_edge_overlap_are_kept (dupes-core/src/lib.rs:1523-1563)",
+    "generic_groups_outside_ast_duplicates_are_kept (dupes-core/src/lib.rs:1566-1606)",
+]
+member_fingerprints = ["884e809fc8459bb3"]
 
 [[ignore]]
-fingerprint = "a890177f43e81dba"
-reason = "test pattern: normalizer parse-assert tests"
+fingerprint = "22d38dc9349d602d"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "stanza_segment_rejects_comment_banner_without_rows (dupes-core/src/text_units.rs:1657-1667)",
+    "stanza_window_rejects_brace_only_lines (dupes-core/src/text_units.rs:1713-1718)",
+]
+member_fingerprints = ["334d00ae260281f8"]
 
 [[ignore]]
-fingerprint = "3d3201c5f14ab762"
-reason = "test pattern: CLI integration cargo_bin-assert tests"
+fingerprint = "2384faaacdb77fc8"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line_windows_reject_import_module_scaffolding (dupes-core/src/text_units.rs:1946-1960)",
+    "line_windows_reject_method_chain_tails (dupes-core/src/text_units.rs:1963-1979)",
+]
+member_fingerprints = ["8880ea8f3d1e6786"]
 
 [[ignore]]
-fingerprint = "7007bf339218876b"
-reason = "test helper: parse_fn/parse_expr duplicated across test modules"
-
-[[ignore]]
-fingerprint = "9f35b03e35951497"
-reason = "test pattern: normalizer parse-assert tests"
-
-[[ignore]]
-fingerprint = "05c712ce300ca381"
-reason = "test pattern: similarity score assertion tests"
-
-[[ignore]]
-fingerprint = "4a057dfc7f41985d"
-reason = "test pattern: CLI integration closures extracting fingerprints"
-
-[[ignore]]
-fingerprint = "b4c2845471b35c78"
-reason = "test pattern: extractor tests in core_with_syn"
-
-[[ignore]]
-fingerprint = "15aa50d59c3ce43d"
-reason = "test pattern: parser test_has_*_attr tests"
-
-[[ignore]]
-fingerprint = "1b1a295e656f6427"
-reason = "test pattern: node reindex tests"
-
-[[ignore]]
-fingerprint = "27724014c86e42d4"
-reason = "test pattern: scanner skip tests"
-
-[[ignore]]
-fingerprint = "401e82d58c3c1885"
+fingerprint = "24be9e66166fc204"
 reason = "test pattern: parser test tagging tests"
+members = [
+    "test_functions_tagged_as_test (dupes-rust/src/parser.rs:1051-1073)",
+    "cfg_test_module_functions_tagged_as_test (dupes-rust/src/parser.rs:1076-1100)",
+]
+member_fingerprints = ["41528b89d650b04c"]
 
 [[ignore]]
-fingerprint = "489e1f2eda932932"
-reason = "test pattern: text reporter empty output tests"
+fingerprint = "29c24730916be433"
+reason = "test helper: default_config duplicated across dupes-python test files"
+members = [
+    "default_config (dupes-python/tests/integration.rs:14-19)",
+    "default_config (dupes-python/tests/core_with_python_tests.rs:12-17)",
+]
+member_fingerprints = ["7db92cd74dc7694f"]
 
 [[ignore]]
-fingerprint = "559408d5e05e7d1d"
-reason = "test pattern: CLI sub-function tests"
+fingerprint = "2a8324ba4d9a3754"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "extracts_while_loop_bodies (dupes-rust/tests/core_with_syn_tests.rs:608-619)",
+    "extracts_bare_loop_bodies (dupes-rust/tests/core_with_syn_tests.rs:622-633)",
+]
+member_fingerprints = ["57fe49c40940119f"]
 
 [[ignore]]
-fingerprint = "74299b61446139ea"
-reason = "test pattern: normalizer variable renaming tests"
-
-[[ignore]]
-fingerprint = "9f91e05c30ba9c2a"
-reason = "test pattern: grouper percentage helper tests"
-
-[[ignore]]
-fingerprint = "c43a592d029bdbbe"
-reason = "test pattern: grouper no-duplicates tests"
-
-[[ignore]]
-fingerprint = "df1aa65514669f67"
-reason = "test pattern: similarity score tests"
-
-[[ignore]]
-fingerprint = "e4d1732261addcf5"
+fingerprint = "323f5d6b3952ee25"
 reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "error_on_directory_with_unknown_files_only (code-dupes/tests/language.rs:84-89)",
+    "ambiguous_language_resolved_with_explicit_flag (code-dupes/tests/language.rs:206-220)",
+]
+member_fingerprints = ["5729617c448496e9"]
 
 [[ignore]]
-fingerprint = "e5c78b93ca0014f0"
-reason = "test pattern: extractor loop body tests"
+fingerprint = "36b453438017d851"
+reason = "test pattern: scanner skip tests"
+members = [
+    "scan_skips_target_directory (dupes-core/src/scanner.rs:157-163)",
+    "scan_skips_hidden_directories (dupes-core/src/scanner.rs:166-176)",
+]
+member_fingerprints = ["e625feb3c6f1ca89"]
 
 [[ignore]]
-fingerprint = "ec41f6baebd90a97"
-reason = "test pattern: normalizer array/tuple tests"
+fingerprint = "3f118c9cc1c21b82"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line_windows_do_not_cross_blank_line_boundaries (dupes-core/src/text_units.rs:1597-1613)",
+    "line_windows_reject_block_comment_only_prose (dupes-core/src/text_units.rs:2052-2067)",
+]
+member_fingerprints = ["8ac0266928c9d1b8"]
 
 [[ignore]]
-fingerprint = "f6cbca656f13eb2b"
+fingerprint = "40577b2b8f7ee866"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "test_has_test_attr (dupes-rust/src/parser.rs:1003-1024)",
+    "test_has_cfg_test_attr (dupes-rust/src/parser.rs:1027-1048)",
+]
+member_fingerprints = ["c54bd79619fa5014"]
+
+[[ignore]]
+fingerprint = "51cd712105ec011a"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "simple_expr_different_op (dupes-rust/tests/core_with_syn_tests.rs:185-189)",
+    "same_macro_different_arg_count_partial_similarity (dupes-rust/tests/core_with_syn_tests.rs:267-271)",
+]
+member_fingerprints = ["5048df4016d637af"]
+
+[[ignore]]
+fingerprint = "53cc57f5152453ab"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "generic_groups_covered_by_ast_duplicates_are_suppressed (dupes-core/src/lib.rs:1437-1477)",
+    "generic_groups_mostly_covered_by_ast_duplicates_are_suppressed (dupes-core/src/lib.rs:1480-1520)",
+]
+member_fingerprints = ["f1f11e9b34c9b301"]
+
+[[ignore]]
+fingerprint = "5d49bd2c5925e2d9"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "stanza_segment_accepts_attribute_prelude_before_header (dupes-core/src/text_units.rs:1625-1638)",
+    "stanza_segment_accepts_trailing_close_brace_row (dupes-core/src/text_units.rs:1641-1648)",
+]
+member_fingerprints = ["851e1ce68aee3ba4"]
+
+[[ignore]]
+fingerprint = "68e4f2720037790c"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "token_windows_reject_import_module_scaffolding (dupes-core/src/text_units.rs:1869-1884)",
+    "token_windows_reject_method_chain_tails (dupes-core/src/text_units.rs:1926-1943)",
+]
+member_fingerprints = ["40d9a97aa5fb653b"]
+
+[[ignore]]
+fingerprint = "6c5e671d95109eb5"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "respects_min_nodes (dupes-python/tests/integration.rs:346-356)",
+    "respects_min_lines (dupes-python/tests/integration.rs:359-369)",
+]
+member_fingerprints = ["abb0d3460cc1afb6"]
+
+[[ignore]]
+fingerprint = "6df9b4a83b374434"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "binary_add (dupes-treesitter/src/normalizer.rs:620-631)",
+    "unary_not (dupes-treesitter/src/normalizer.rs:673-684)",
+]
+member_fingerprints = ["67cf18c36b6261ec"]
+
+[[ignore]]
+fingerprint = "7a308fb8e6f9c929"
+reason = "trivial: Reporter::new constructors delegate to with_options with default ReportOptions"
+members = [
+    "JsonReporter::new (dupes-core/src/output/json.rs:14-22)",
+    "TextReporter::new (dupes-core/src/output/text.rs:28-36)",
+]
+member_fingerprints = ["9ff42b654e307fa9"]
+
+[[ignore]]
+fingerprint = "850d32b9e395d5fd"
+reason = "test helper: normalized-node builders duplicated across core test modules"
+members = [
+    "token_body (dupes-core/src/grouper.rs:477-482)",
+    "test_body (dupes-core/src/lib.rs:1244-1249)",
+]
+member_fingerprints = ["6cbc436819c3bdd6"]
+
+[[ignore]]
+fingerprint = "94a7b60a2b215369"
+reason = "test pattern: treesitter bridge integration tests"
+members = [
+    "while_loop_normalization (dupes-treesitter/tests/python_integration.rs:412-424)",
+    "for_loop_normalization (dupes-treesitter/tests/python_integration.rs:427-439)",
+]
+member_fingerprints = ["cb38b8dc780243bb"]
+
+[[ignore]]
+fingerprint = "97fb7646ea52f44c"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "renamed_variables_produce_identical_trees (dupes-rust/src/normalizer/tests.rs:18-27)",
+    "complex_function_normalization (dupes-rust/src/normalizer/tests.rs:251-280)",
+]
+member_fingerprints = ["88ea4186ecfb572c"]
+
+[[ignore]]
+fingerprint = "9f52e73a1562458e"
+reason = "test pattern: grouper grouping and percentage tests"
+members = [
+    "percentage_helpers (dupes-core/src/grouper.rs:531-549)",
+    "percentage_helpers_zero_total (dupes-core/src/grouper.rs:552-570)",
+]
+member_fingerprints = ["6f5bee6b9defc43c"]
+
+[[ignore]]
+fingerprint = "b6c4795e023a93d8"
+reason = "trait impl parity: one-line file_extensions impls (RustAnalyzer and the lib.rs test mock)"
+members = [
+    "<RustAnalyzer as LanguageAnalyzer>::file_extensions (dupes-rust/src/lib.rs:33-35)",
+    "<TestAnalyzer as LanguageAnalyzer>::file_extensions (dupes-core/src/lib.rs:1357-1359)",
+]
+member_fingerprints = ["f26340ada5f05d85"]
+
+[[ignore]]
+fingerprint = "b9700313c1452d4c"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "call_with_args (dupes-treesitter/src/normalizer.rs:810-822)",
+    "call_no_args (dupes-treesitter/src/normalizer.rs:825-837)",
+]
+member_fingerprints = ["bc489a27f8baf8a0"]
+
+[[ignore]]
+fingerprint = "c4f3cc65aab97f5f"
+reason = "structural-only match: predicate-OR closures over different free-function predicates; free functions normalize to placeholders by design"
+members = [
+    "closure at /home/openai/rust-forks/cargo-dupes/dupes-core/src/text_units.rs:427 (dupes-core/src/text_units.rs:427-427)",
+    "closure at /home/openai/rust-forks/cargo-dupes/dupes-core/src/text_units.rs:991 (dupes-core/src/text_units.rs:991-991)",
+]
+member_fingerprints = ["330bb43f98cca0b9"]
+
+[[ignore]]
+fingerprint = "c5a1cc49242f24de"
+reason = "test pattern: node reindex tests"
+members = [
+    "reindex_remaps_from_zero (dupes-core/src/node.rs:384-401)",
+    "reindex_preserves_same_placeholder_identity (dupes-core/src/node.rs:404-421)",
+]
+member_fingerprints = ["f61712d97ca6b5a9"]
+
+[[ignore]]
+fingerprint = "cef778c6565ad9d7"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "no_duplicates_no_groups (dupes-rust/tests/core_with_syn_tests.rs:299-309)",
+    "single_unit_no_groups (dupes-rust/tests/core_with_syn_tests.rs:367-371)",
+]
+member_fingerprints = ["2f52f9f97d49d8eb"]
+
+[[ignore]]
+fingerprint = "cfe454f40f5487f3"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "empty_file_returns_no_units (dupes-python/tests/integration.rs:374-377)",
+    "comments_only_file_returns_no_units (dupes-python/tests/integration.rs:380-383)",
+]
+member_fingerprints = ["14495baaf8975534"]
+
+[[ignore]]
+fingerprint = "e04685a7c4352880"
 reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "explicit_language_on_empty_dir_reports_no_source_files (code-dupes/tests/language.rs:129-132)",
+    "python_explicit_language_on_empty_dir (code-dupes/tests/language.rs:233-236)",
+]
+member_fingerprints = ["5cdec148eff737d8"]
 
 [[ignore]]
-fingerprint = "7656e1e5c465c313"
-reason = "test fixture: sub_function_dupes near pair"
+fingerprint = "e4c57a07b7e72cc1"
+reason = "test helper: CLI test-support fixture helpers parameterized per language"
+members = [
+    "rust_fixture_path (dupes-cli-test-support/src/lib.rs:56-58)",
+    "code_fixture_path (dupes-cli-test-support/src/lib.rs:62-64)",
+]
+member_fingerprints = ["b61d8f1b042dea32"]
 
 [[ignore]]
-fingerprint = "7ba85b58aeaf5b4d"
-reason = "test pattern: CLI integration near-similar tests"
+fingerprint = "e4e643ecfd26f73f"
+reason = "test pattern: treesitter bridge integration tests"
+members = [
+    "min_nodes_filter (dupes-treesitter/tests/python_integration.rs:300-308)",
+    "min_lines_filter (dupes-treesitter/tests/python_integration.rs:311-319)",
+]
+member_fingerprints = ["303231b796699a97"]
 
 [[ignore]]
-fingerprint = "52c269dbc6d6d37f"
-reason = "test pattern: CLI check percentage tests"
+fingerprint = "f023703fd1956974"
+reason = "test helper: normalized-node builders duplicated across core test modules"
+members = [
+    "binary (dupes-core/src/lib.rs:1339-1341)",
+    "binary (dupes-core/src/extractor.rs:627-629)",
+]
+member_fingerprints = ["c5629b72e9f491dc"]
 
 [[ignore]]
-fingerprint = "59703f170ca82c7f"
-reason = "test pattern: config threshold tests"
+fingerprint = "fd8b50f17f779707"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "while_loop (dupes-treesitter/src/normalizer.rs:784-794)",
+    "for_loop (dupes-treesitter/src/normalizer.rs:797-807)",
+]
+member_fingerprints = ["a2a81a8cd19f2f78"]
 
 [[ignore]]
-fingerprint = "eaacfeb4ac1bac68"
-reason = "test pattern: fingerprint identity/difference tests"
+fingerprint = "fdae722084d3f495"
+reason = "trivial: ReportSection boolean projections (show_similarity/show_parent)"
+members = [
+    "ReportSection::show_similarity (dupes-core/src/output/mod.rs:63-65)",
+    "ReportSection::show_parent (dupes-core/src/output/mod.rs:68-70)",
+]
+member_fingerprints = ["2654b7c5192371e6"]
 
 [[ignore]]
-fingerprint = "7032e6ea3c9d9266"
-reason = "test pattern: normalizer macro position tests"
+fingerprint = "3f9cb82b6318c658"
+reason = "test helper: CLI test-support fixture helpers parameterized per language"
+members = [
+    "fixture_stdout (dupes-cli-test-support/src/lib.rs:201-203)",
+    "path_stdout (dupes-cli-test-support/src/lib.rs:254-256)",
+]
+member_fingerprints = [
+    "5acd6c3981278507",
+    "f181173d41bddca9",
+]
 
 [[ignore]]
-fingerprint = "98682186baecf6d0"
-reason = "test pattern: let-else diverge block tests"
+fingerprint = "9444925f4b7cca62"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "text_report_exact_empty (dupes-core/src/output/text.rs:430-436)",
+    "text_report_near_empty (dupes-core/src/output/text.rs:478-484)",
+]
+member_fingerprints = [
+    "a16da5f547fb7ab8",
+    "a897baf87b410efd",
+]
 
 [[ignore]]
-fingerprint = "e0e6adcadee67d3e"
+fingerprint = "b2b315a19aa8d6c4"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "stanza_segment_rejects_lone_close_brace (dupes-core/src/text_units.rs:1651-1654)",
+    "stanza_segment_rejects_import_rows (dupes-core/src/text_units.rs:1670-1676)",
+]
+member_fingerprints = [
+    "c73fde0ecd297800",
+    "d5e9a3f83cedf793",
+]
+
+[[ignore]]
+fingerprint = "e561f25e91dc32b3"
+reason = "tree-sitter idiom: first-named-child cursor walks; the cursor API forces the shape"
+members = [
+    "closure at /home/openai/rust-forks/cargo-dupes/dupes-treesitter/src/normalizer.rs:436 (dupes-treesitter/src/normalizer.rs:436-439)",
+    "closure at /home/openai/rust-forks/cargo-dupes/dupes-treesitter/tests/python_integration.rs:108 (dupes-treesitter/tests/python_integration.rs:108-111)",
+]
+member_fingerprints = [
+    "f516ab26700238b0",
+    "fcb5e2cd56263ef3",
+]
+
+[[ignore]]
+fingerprint = "31d088d9d7a7bf6b"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "stanza_block_merges_derive_headed_blank_separated_table (dupes-core/src/text_units.rs:1679-1694)",
+    "stanza_block_merges_final_stanza_before_close (dupes-core/src/text_units.rs:1697-1710)",
+]
+member_fingerprints = [
+    "31eef463173532a1",
+    "a9e5d9cf16d2f2b7",
+]
+
+[[ignore]]
+fingerprint = "20e8909267f5e059"
+reason = "test pattern: parse-assert idiom shared across analyzer test suites"
+members = [
+    "lambda_inside_function_extracted (dupes-python/tests/integration.rs:642-652)",
+    "extracts_closures (dupes-rust/src/parser.rs:826-841)",
+]
+member_fingerprints = [
+    "72ade8a4defc784e",
+    "9358526345570204",
+]
+
+[[ignore]]
+fingerprint = "4b7d284c584952b0"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "identical_functions_same_fingerprint (dupes-rust/tests/core_with_syn_tests.rs:61-71)",
+    "different_functions_different_fingerprint (dupes-rust/tests/core_with_syn_tests.rs:74-84)",
+]
+member_fingerprints = [
+    "512c74f5318bdcc8",
+    "b7f0089d8a265887",
+]
+
+[[ignore]]
+fingerprint = "a6c9e1c0ceffed1f"
+reason = "test pattern: opaque-handling tests duplicated across treesitter test modules"
+members = [
+    "error_node_becomes_opaque (dupes-treesitter/src/normalizer.rs:855-865)",
+    "error_node_becomes_opaque (dupes-treesitter/tests/python_integration.rs:360-376)",
+]
+member_fingerprints = [
+    "b421dd64a5caecd8",
+    "e2bcc5404f53c6f2",
+]
+
+[[ignore]]
+fingerprint = "cf08156d8ca58292"
+reason = "test helper: CLI test-support fixture helpers parameterized per language"
+members = [
+    "exact_fingerprint_for_path (dupes-cli-test-support/src/lib.rs:638-641)",
+    "near_fingerprint_for_path (dupes-cli-test-support/src/lib.rs:643-646)",
+]
+member_fingerprints = [
+    "7a2a913b95ffd6e0",
+    "d0f0226bd15bc3b2",
+]
+
+[[ignore]]
+fingerprint = "f38a104f0a8a4450"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "type_position_macro_normalized (dupes-rust/src/normalizer/tests.rs:380-386)",
+    "pat_macro_normalized (dupes-rust/src/normalizer/tests.rs:389-395)",
+]
+member_fingerprints = [
+    "f26881bea2405a1e",
+    "f80a2973060e2168",
+]
+
+[[ignore]]
+fingerprint = "d2ec799fc6b2062c"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "let_else_diverge_blocks_differ (dupes-rust/tests/core_with_syn_tests.rs:655-667)",
+    "let_else_same_diverge_blocks_match (dupes-rust/tests/core_with_syn_tests.rs:670-682)",
+]
+member_fingerprints = [
+    "260d2cf1c467368f",
+    "3e80ec3158146d41",
+]
+
+[[ignore]]
+fingerprint = "812b639a8d36a3c0"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "structural_changes_produce_different_trees (dupes-rust/src/normalizer/tests.rs:30-38)",
+    "tuple_pattern_normalized (dupes-rust/src/normalizer/tests.rs:184-192)",
+]
+member_fingerprints = [
+    "40cebf52ad06f333",
+    "8d8f5ea6d8b83abb",
+]
+
+[[ignore]]
+fingerprint = "46902956c231a3fd"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "extracts_methods_from_impl (dupes-rust/src/parser.rs:655-677)",
+    "extracts_trait_impl_methods (dupes-rust/src/parser.rs:680-704)",
+]
+member_fingerprints = [
+    "452edf922f6de8a4",
+    "cc5bfd09b77dbf9a",
+]
+
+[[ignore]]
+fingerprint = "63d84089c4be489e"
 reason = "test pattern: config load tests"
+members = [
+    "config_with_thresholds (dupes-core/src/config.rs:447-456)",
+    "config_with_percentage_thresholds (dupes-core/src/config.rs:479-488)",
+]
+member_fingerprints = [
+    "620c4d4ae8937e67",
+    "8e0e126911ae2217",
+]
 
 [[ignore]]
-fingerprint = "2ccd1ff2bc5e4fe6"
-reason = "test pattern: normalizer structural change tests"
+fingerprint = "5e98098f41084ef6"
+reason = "test helper: tree-sitter Python parse helpers duplicated across treesitter test modules"
+members = [
+    "parse (dupes-treesitter/src/normalizer.rs:490-495)",
+    "parse_python (dupes-treesitter/tests/python_integration.rs:82-89)",
+]
+member_fingerprints = [
+    "22e7513334b9ea10",
+    "e9126ffb4ef930bf",
+]
 
 [[ignore]]
-fingerprint = "cbb324b96330538e"
-reason = "test pattern: parser extract impl/trait tests"
+fingerprint = "40c4eb313e508f12"
+reason = "sentinel returns: distinct normalize_ts_node exits return NormalizedNode::leaf(NodeKind::Opaque); same normalized class as the protected return Some(x) shape"
+members = [
+    "if-then branch (dupes-treesitter/src/normalizer.rs:33-35)",
+    "if-then branch (dupes-treesitter/src/normalizer.rs:118-120)",
+    "if-then branch (dupes-treesitter/src/normalizer.rs:124-126)",
+]
+member_fingerprints = ["e7331ba599f5dab6"]
 
 [[ignore]]
-fingerprint = "612e2309111288aa"
-reason = "test pattern: normalizer macro tests"
+fingerprint = "287553b826582ad7"
+reason = "idiomatic guard: early return Ok(()) on empty input (write_successor_hints, write_dimension_pair)"
+members = [
+    "if-then branch (dupes-core/src/cli.rs:782-784)",
+    "if-then branch (dupes-core/src/output/text.rs:392-394)",
+]
+member_fingerprints = ["0a613cb5f9a7761b"]
+
+[[ignore]]
+fingerprint = "94479d566d644582"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "if chain (2 branches) (dupes-rust/src/parser.rs:1014-1023)",
+    "if chain (2 branches) (dupes-rust/src/parser.rs:1038-1047)",
+]
+member_fingerprints = ["8c2944546c393525"]
+
+[[ignore]]
+fingerprint = "98e85646be635d6b"
+reason = "idiomatic guard: search-loop return Some(found) branches; the protected return Some(x) shape"
+members = [
+    "if-then branch (dupes-treesitter/src/normalizer.rs:185-187)",
+    "if-then branch (dupes-treesitter/tests/python_integration.rs:97-99)",
+]
+member_fingerprints = ["c8af333c45980780"]
+
+[[ignore]]
+fingerprint = "a9bd29ef445333da"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "match arm 1 (dupes-rust/src/normalizer/tests.rs:537-540)",
+    "match arm 1 (dupes-rust/src/normalizer/tests.rs:544-547)",
+]
+member_fingerprints = ["c908ee0f24bd26a5"]
+
+[[ignore]]
+fingerprint = "d7997340ccfb04e0"
+reason = "tree-sitter idiom: first-named-child cursor walks; the cursor API forces the shape"
+members = [
+    "closure body (dupes-treesitter/src/normalizer.rs:436-439)",
+    "closure body (dupes-treesitter/tests/python_integration.rs:108-111)",
+]
+member_fingerprints = ["18af04642cbb9518"]
+
+[[ignore]]
+fingerprint = "51049895510c7e46"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:325-345)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:389-399)",
+]
+member_fingerprints = ["71cfcc2a453b794b"]
+
+[[ignore]]
+fingerprint = "67a1282df806b18d"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:275-294)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:373-386)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:403-413)",
+]
+member_fingerprints = ["d9f9328c56824f41"]
+
+[[ignore]]
+fingerprint = "e31f0e5dd86ab2e1"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:494-508)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:579-597)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:635-649)",
+]
+member_fingerprints = ["709c9186bb2501ba"]
+
+[[ignore]]
+fingerprint = "8accf65c3895f988"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:1868-1881)",
+    "normalized token window (dupes-core/src/text_units.rs:1886-1902)",
+    "normalized token window (dupes-core/src/text_units.rs:1925-1940)",
+]
+member_fingerprints = ["1febe7729a90f3ab"]
+
+[[ignore]]
+fingerprint = "8c2218bf5ac96728"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:1720-1735)",
+    "normalized token window (dupes-core/src/text_units.rs:1844-1859)",
+    "normalized token window (dupes-core/src/text_units.rs:1945-1958)",
+    "normalized token window (dupes-core/src/text_units.rs:1981-1996)",
+    "normalized token window (dupes-core/src/text_units.rs:2000-2013)",
+    "normalized token window (dupes-core/src/text_units.rs:2017-2030)",
+    "normalized token window (dupes-core/src/text_units.rs:2034-2047)",
+    "normalized token window (dupes-core/src/text_units.rs:2051-2065)",
+]
+member_fingerprints = ["257a9a313ba6671c"]
+
+[[ignore]]
+fingerprint = "1b8eb73237c86099"
+reason = "test pattern: core-pipeline-with-Python tests"
+members = [
+    "normalized token window (dupes-python/tests/core_with_python_tests.rs:97-109)",
+    "normalized token window (dupes-python/tests/core_with_python_tests.rs:116-131)",
+]
+member_fingerprints = ["c534936210e7490f"]
+
+[[ignore]]
+fingerprint = "5b7c3957609ee61c"
+reason = "test pattern: core-pipeline-with-Python tests"
+members = [
+    "normalized token window (dupes-python/tests/core_with_python_tests.rs:138-153)",
+    "normalized token window (dupes-python/tests/core_with_python_tests.rs:160-173)",
+]
+member_fingerprints = ["0ce7a73e77f95cef"]
+
+[[ignore]]
+fingerprint = "a784b5af8911ded0"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:349-359)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:441-456)",
+]
+member_fingerprints = ["fcf59520d9f53c83"]
+
+[[ignore]]
+fingerprint = "dab43d5450aaeaaa"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "normalized token window (dupes-core/src/output/json.rs:292-300)",
+    "normalized token window (dupes-core/src/output/text.rs:455-463)",
+]
+member_fingerprints = ["d19ad3890b118379"]
+
+[[ignore]]
+fingerprint = "11127e7f1450413a"
+reason = "test pattern: similarity score tests"
+members = [
+    "normalized token window (dupes-core/src/similarity.rs:161-169)",
+    "normalized token window (dupes-core/src/similarity.rs:178-186)",
+]
+member_fingerprints = ["ced3affb52a2423e"]
+
+[[ignore]]
+fingerprint = "10475042d31482af"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:481-489)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:559-567)",
+]
+member_fingerprints = ["ce2518e9c4da129b"]
+
+[[ignore]]
+fingerprint = "d04663746cbeaca3"
+reason = "test pattern: parse-assert idiom shared across dupes-rust test modules"
+members = [
+    "normalized token window (dupes-rust/src/normalizer/tests.rs:17-24)",
+    "normalized token window (dupes-rust/src/normalizer/tests.rs:29-36)",
+    "normalized token window (dupes-rust/src/normalizer/tests.rs:183-190)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:60-67)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:73-80)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:106-113)",
+    "normalized token window (dupes-rust/tests/core_with_syn_tests.rs:120-127)",
+]
+member_fingerprints = ["7bf1c83ccc2b2309"]
+
+[[ignore]]
+fingerprint = "cea15953a2c9ce9e"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "normalized token window (dupes-core/src/output/json.rs:239-246)",
+    "normalized token window (dupes-core/src/output/text.rs:405-412)",
+]
+member_fingerprints = ["728de3db1f096017"]
+
+[[ignore]]
+fingerprint = "6973c783b31634fe"
+reason = "test scaffolding: shared CLI test-file preamble (mod common and support imports)"
+members = [
+    "normalized token window (code-dupes/tests/check.rs:3-9)",
+    "normalized token window (code-dupes/tests/sub_function.rs:3-9)",
+    "normalized token window (code-dupes/tests/report.rs:3-9)",
+    "normalized token window (cargo-dupes/tests/check.rs:3-9)",
+    "normalized token window (cargo-dupes/tests/sub_function.rs:3-9)",
+    "normalized token window (cargo-dupes/tests/report.rs:3-9)",
+]
+member_fingerprints = ["7ad3172561ef8b27"]
+
+[[ignore]]
+fingerprint = "6867dd72f1f5bb93"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "normalized token window (dupes-rust/src/normalizer/tests.rs:282-288)",
+    "normalized token window (dupes-rust/src/normalizer/tests.rs:319-325)",
+    "normalized token window (dupes-rust/src/normalizer/tests.rs:349-355)",
+]
+member_fingerprints = ["215d8b285e70be97"]
+
+[[ignore]]
+fingerprint = "edba59ce036e5f9e"
+reason = "test pattern: node reindex tests"
+members = [
+    "normalized token window (dupes-core/src/node.rs:487-493)",
+    "normalized token window (dupes-core/src/node.rs:521-527)",
+]
+member_fingerprints = ["f72e06ffb8f750c6"]
+
+[[ignore]]
+fingerprint = "fa700721f7f4b4d1"
+reason = "test pattern: scanner skip tests"
+members = [
+    "normalized token window (dupes-core/src/scanner.rs:146-150)",
+    "normalized token window (dupes-core/src/scanner.rs:156-160)",
+    "normalized token window (dupes-core/src/scanner.rs:165-169)",
+    "normalized token window (dupes-core/src/scanner.rs:178-183)",
+]
+member_fingerprints = ["834edee271dcfb0f"]
+
+[[ignore]]
+fingerprint = "deb3bef9984d3fba"
+reason = "test pattern: node reindex tests"
+members = [
+    "normalized token window (dupes-core/src/node.rs:383-388)",
+    "normalized token window (dupes-core/src/node.rs:403-408)",
+    "normalized token window (dupes-core/src/node.rs:580-585)",
+]
+member_fingerprints = ["39471a4a5f71044f"]
+
+[[ignore]]
+fingerprint = "67ecd4d7d478b4c3"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "normalized token window (dupes-core/src/output/json.rs:264-269)",
+    "normalized token window (dupes-core/src/output/text.rs:429-434)",
+    "normalized token window (dupes-core/src/output/text.rs:477-482)",
+]
+member_fingerprints = ["36d4de0302f1654b"]
+
+[[ignore]]
+fingerprint = "8c7fbf67cd00b97c"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "normalized token window (dupes-core/src/output/json.rs:274-279)",
+    "normalized token window (dupes-core/src/output/text.rs:438-443)",
+]
+member_fingerprints = ["28b25d0924740be8"]
+
+[[ignore]]
+fingerprint = "cb0656cb16fadddd"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "normalized token window (dupes-core/src/output/json.rs:341-346)",
+    "normalized token window (dupes-core/src/output/text.rs:486-491)",
+]
+member_fingerprints = ["3554ddda5fcd103a"]
+
+[[ignore]]
+fingerprint = "92c6d99b0a49e9c8"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "normalized token window (dupes-core/src/lib.rs:2168-2172)",
+    "normalized token window (dupes-core/src/lib.rs:2192-2196)",
+    "normalized token window (dupes-core/src/lib.rs:2217-2221)",
+]
+member_fingerprints = ["dc61afc28447c01e"]
+
+[[ignore]]
+fingerprint = "5173dace5fb87f21"
+reason = "test pattern: node reindex tests"
+members = [
+    "normalized token window (dupes-core/src/node.rs:545-549)",
+    "normalized token window (dupes-core/src/node.rs:554-558)",
+]
+member_fingerprints = ["26b21c6e387579e3"]
+
+[[ignore]]
+fingerprint = "7ae52e6657b4d14f"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "normalized token window (dupes-core/src/output/json.rs:248-252)",
+    "normalized token window (dupes-core/src/output/text.rs:414-418)",
+]
+member_fingerprints = ["640b7c86b77f91f4"]
+
+[[ignore]]
+fingerprint = "9c2aa77e9b8fbb39"
+reason = "test pattern: core-pipeline-with-Python tests"
+members = [
+    "normalized token window (dupes-python/tests/core_with_python_tests.rs:54-70)",
+    "normalized token window (dupes-python/tests/core_with_python_tests.rs:73-90)",
+]
+member_fingerprints = [
+    "5fd4428adea561f3",
+    "edb14ed59903bfe8",
+]
+
+[[ignore]]
+fingerprint = "5ab375f88169220b"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "normalized token window (code-dupes/tests/language.rs:83-86)",
+    "normalized token window (code-dupes/tests/language.rs:168-175)",
+]
+member_fingerprints = [
+    "88dbf2e08b69b80f",
+    "962636df38776c49",
+]
+
+[[ignore]]
+fingerprint = "ab30f6854b6137b0"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:1596-1603)",
+    "normalized token window (dupes-core/src/text_units.rs:1744-1751)",
+]
+member_fingerprints = [
+    "9ce84387e7f3bbf6",
+    "9d72ff8a83d4f8b4",
+]
+
+[[ignore]]
+fingerprint = "220a531a69312fea"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "normalized token window (code-dupes/tests/options.rs:3-9)",
+    "normalized token window (cargo-dupes/tests/options.rs:3-9)",
+]
+member_fingerprints = [
+    "34e77d3ddefd9274",
+    "bb804112af4f2d5d",
+]
+
+[[ignore]]
+fingerprint = "a74a6a56b304c4af"
+reason = "trait impl parity: RustAnalyzer/PythonAnalyzer parse_file delegation bodies match by trait shape"
+members = [
+    "normalized token window (dupes-python/src/lib.rs:89-95)",
+    "normalized token window (dupes-rust/src/lib.rs:37-43)",
+]
+member_fingerprints = [
+    "58dbe448750798ba",
+    "8e5c4b5487cb2ed3",
+]
+
+[[ignore]]
+fingerprint = "b3845b1ddf505da2"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "normalized token window (code-dupes/tests/language.rs:184-189)",
+    "normalized token window (code-dupes/tests/language.rs:205-210)",
+]
+member_fingerprints = [
+    "5d4b917e4255d2b1",
+    "c787438123c0e927",
+]
+
+[[ignore]]
+fingerprint = "d7281b49a5bb38fb"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "raw token window (dupes-core/src/output/json.rs:239-246)",
+    "raw token window (dupes-core/src/output/text.rs:405-412)",
+]
+member_fingerprints = ["33931ece8c79839c"]
+
+[[ignore]]
+fingerprint = "1b89f7037c81f39e"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "line window (cargo-dupes/tests/report.rs:5-15)",
+    "line window (code-dupes/tests/report.rs:5-15)",
+]
+member_fingerprints = ["bb0de19cd903e9a5"]
+
+[[ignore]]
+fingerprint = "2a9313ecc83a87dd"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "line window (code-dupes/tests/language.rs:187-197)",
+    "line window (code-dupes/tests/language.rs:208-218)",
+]
+member_fingerprints = ["0bcf8bb22afd16cb"]
+
+[[ignore]]
+fingerprint = "09487dc89090c4c8"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:1438-1447)",
+    "line window (dupes-core/src/lib.rs:1481-1490)",
+    "line window (dupes-core/src/lib.rs:1524-1533)",
+    "line window (dupes-core/src/lib.rs:1567-1576)",
+    "line window (dupes-core/src/lib.rs:1610-1619)",
+]
+member_fingerprints = ["1a2d0abc4e21dd5c"]
+
+[[ignore]]
+fingerprint = "d5d30781b480355a"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:2175-2184)",
+    "line window (dupes-core/src/lib.rs:2200-2209)",
+]
+member_fingerprints = ["e9257e4320cf38df"]
+
+[[ignore]]
+fingerprint = "68ffad7edbeabae4"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "line window (dupes-core/src/output/json.rs:296-305)",
+    "line window (dupes-core/src/output/text.rs:459-468)",
+]
+member_fingerprints = ["5c253b550e73ade6"]
+
+[[ignore]]
+fingerprint = "f97853e2a082fb46"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:181-190)",
+    "line window (dupes-treesitter/tests/python_integration.rs:55-64)",
+]
+member_fingerprints = ["ba92e60d7fad8c0c"]
+
+[[ignore]]
+fingerprint = "3cac16b2b0724800"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "line window (dupes-rust/src/parser.rs:1053-1062)",
+    "line window (dupes-rust/src/parser.rs:1105-1114)",
+]
+member_fingerprints = ["f15b284b68fabc0a"]
+
+[[ignore]]
+fingerprint = "4ac371a5387fc499"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "line window (dupes-core/src/ignore.rs:309-317)",
+    "line window (dupes-core/src/ignore.rs:331-339)",
+]
+member_fingerprints = ["d09a241a9349f126"]
+
+[[ignore]]
+fingerprint = "cb9e9a19c7ecb39a"
+reason = "test pattern: parse-assert idiom shared across dupes-rust test modules"
+members = [
+    "line window (dupes-rust/src/parser.rs:736-743)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:278-285)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:444-451)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:464-471)",
+]
+member_fingerprints = ["9a95175d43b1a73e"]
+
+[[ignore]]
+fingerprint = "e584b26eb48915eb"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:126-133)",
+    "line window (dupes-treesitter/src/normalizer.rs:455-462)",
+    "line window (dupes-treesitter/tests/python_integration.rs:26-33)",
+]
+member_fingerprints = ["6c944910c60f11c3"]
+
+[[ignore]]
+fingerprint = "5eda5d1f7bbe0f28"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "line window (cargo-dupes/tests/check.rs:5-12)",
+    "line window (code-dupes/tests/check.rs:5-12)",
+]
+member_fingerprints = ["c28db72fdcf23fd7"]
+
+[[ignore]]
+fingerprint = "6a3b23be68c9e8d2"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "line window (cargo-dupes/tests/sub_function.rs:5-12)",
+    "line window (code-dupes/tests/sub_function.rs:5-12)",
+]
+member_fingerprints = ["0560ccceec7f270d"]
+
+[[ignore]]
+fingerprint = "0c27d04eb0108629"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-treesitter/src/normalizer.rs:459-466)",
+    "line window (dupes-treesitter/tests/python_integration.rs:30-37)",
+]
+member_fingerprints = ["db64e37a6dc9b901"]
+
+[[ignore]]
+fingerprint = "066e4a903b6181fb"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-treesitter/src/normalizer.rs:708-715)",
+    "line window (dupes-treesitter/tests/python_integration.rs:191-198)",
+]
+member_fingerprints = ["89e9e29b9d95045e"]
+
+[[ignore]]
+fingerprint = "070cc3e18088e058"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:189-195)",
+    "line window (dupes-treesitter/src/normalizer.rs:477-483)",
+    "line window (dupes-treesitter/tests/python_integration.rs:63-69)",
+]
+member_fingerprints = ["5ea2b537beb22a38"]
+
+[[ignore]]
+fingerprint = "bd939de2192734da"
+reason = "test helper: make_unit-style struct-literal builders duplicated in grouper and output test modules"
+members = [
+    "line window (dupes-core/src/grouper.rs:460-466)",
+    "line window (dupes-core/src/output/test_support.rs:19-25)",
+]
+member_fingerprints = ["7665a3c8b3883738"]
+
+[[ignore]]
+fingerprint = "5660ca106bd5d182"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:1814-1820)",
+    "line window (dupes-core/src/lib.rs:2013-2019)",
+]
+member_fingerprints = ["17f3db3c77dd122a"]
+
+[[ignore]]
+fingerprint = "ccb5bdf1bacd9827"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "line window (dupes-core/src/output/json.rs:277-283)",
+    "line window (dupes-core/src/output/text.rs:441-447)",
+]
+member_fingerprints = ["8cec61ffee1f5664"]
+
+[[ignore]]
+fingerprint = "0cdd024773e1b44d"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "line window (dupes-rust/src/parser.rs:709-715)",
+    "line window (dupes-rust/src/parser.rs:720-726)",
+]
+member_fingerprints = ["9cbc275263a1fcfc"]
+
+[[ignore]]
+fingerprint = "f91fcd4544d0f610"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-treesitter/src/normalizer.rs:480-486)",
+    "line window (dupes-treesitter/tests/python_integration.rs:66-72)",
+]
+member_fingerprints = ["ba19086632d115b7"]
+
+[[ignore]]
+fingerprint = "a202fbfffca46e14"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:187-192)",
+    "line window (dupes-treesitter/src/mapping.rs:211-216)",
+    "line window (dupes-treesitter/src/normalizer.rs:475-480)",
+    "line window (dupes-treesitter/tests/python_integration.rs:61-66)",
+]
+member_fingerprints = ["9a257ee9f5437332"]
+
+[[ignore]]
+fingerprint = "4bdc1269407a56b9"
+reason = "test scaffolding: inline Cargo.toml fixture rows repeated across config load tests"
+members = [
+    "line window (dupes-core/src/config.rs:325-330)",
+    "line window (dupes-core/src/config.rs:395-400)",
+    "line window (dupes-core/src/config.rs:417-422)",
+]
+member_fingerprints = ["e05d0a35d3e6f903"]
+
+[[ignore]]
+fingerprint = "1bd49e5243525491"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:2128-2133)",
+    "line window (dupes-core/src/lib.rs:2143-2148)",
+]
+member_fingerprints = ["87471af1ac9ce8a2"]
+
+[[ignore]]
+fingerprint = "74a515bebc697f35"
+reason = "field-table parity: JsonStats rows and the test-support stats() parameter list mirror DuplicationStats' field inventory"
+members = [
+    "line window (dupes-core/src/output/json.rs:35-40)",
+    "line window (dupes-core/src/output/test_support.rs:79-84)",
+]
+member_fingerprints = ["2e59fce873d2edab"]
+
+[[ignore]]
+fingerprint = "6aa2f0283c6c89da"
+reason = "test pattern: similarity score tests"
+members = [
+    "line window (dupes-core/src/similarity.rs:163-168)",
+    "line window (dupes-core/src/similarity.rs:180-185)",
+]
+member_fingerprints = ["d3ff16066a7a31a0"]
+
+[[ignore]]
+fingerprint = "0bbca5c70eba3b93"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:144-149)",
+    "line window (dupes-treesitter/tests/python_integration.rs:41-46)",
+]
+member_fingerprints = ["67399b54dd4e4238"]
+
+[[ignore]]
+fingerprint = "7c6974f3676a0beb"
+reason = "test pattern: parse-assert idiom shared across dupes-rust test modules"
+members = [
+    "line window (dupes-rust/src/normalizer/tests.rs:254-259)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:196-201)",
+]
+member_fingerprints = ["265e0b5a78b18444"]
+
+[[ignore]]
+fingerprint = "c6bde941c316018f"
+reason = "test pattern: parse-assert idiom shared across dupes-rust test modules"
+members = [
+    "line window (dupes-rust/src/normalizer/tests.rs:265-270)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:207-212)",
+]
+member_fingerprints = ["f67afcb3846cd21e"]
+
+[[ignore]]
+fingerprint = "cc1bc3d2712fc86f"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:317-322)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:380-385)",
+]
+member_fingerprints = ["32e8e4b021202657"]
+
+[[ignore]]
+fingerprint = "29262f4a25749bd2"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:1454-1458)",
+    "line window (dupes-core/src/lib.rs:1497-1501)",
+    "line window (dupes-core/src/lib.rs:1540-1544)",
+    "line window (dupes-core/src/lib.rs:1583-1587)",
+    "line window (dupes-core/src/lib.rs:1626-1630)",
+    "line window (dupes-core/src/lib.rs:2229-2233)",
+]
+member_fingerprints = ["73e5df48b5bba747"]
+
+[[ignore]]
+fingerprint = "71ae5681583a435b"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:1452-1456)",
+    "line window (dupes-core/src/lib.rs:1495-1499)",
+    "line window (dupes-core/src/lib.rs:1538-1542)",
+    "line window (dupes-core/src/lib.rs:1581-1585)",
+    "line window (dupes-core/src/lib.rs:1624-1628)",
+]
+member_fingerprints = ["027cb6cce310291a"]
+
+[[ignore]]
+fingerprint = "ca7da82f52bc320a"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:1465-1469)",
+    "line window (dupes-core/src/lib.rs:1508-1512)",
+    "line window (dupes-core/src/lib.rs:1551-1555)",
+    "line window (dupes-core/src/lib.rs:1594-1598)",
+    "line window (dupes-core/src/lib.rs:1949-1953)",
+]
+member_fingerprints = ["4c3876d432ced809"]
+
+[[ignore]]
+fingerprint = "ae2fb87398d58a22"
+reason = "trait signature parity: LanguageAnalyzer::parse_file signature repeated across the trait and analyzer impls"
+members = [
+    "line window (dupes-core/src/analyzer.rs:25-29)",
+    "line window (dupes-python/src/lib.rs:89-93)",
+    "line window (dupes-rust/src/lib.rs:37-41)",
+    "line window (dupes-treesitter/src/analyzer.rs:104-108)",
+]
+member_fingerprints = ["d1d5cecb388f5dbf"]
+
+[[ignore]]
+fingerprint = "0d8dd32ad053b97e"
+reason = "test pattern: parse-assert idiom shared across dupes-rust test modules"
+members = [
+    "line window (dupes-rust/src/parser.rs:741-745)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:449-453)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:469-473)",
+]
+member_fingerprints = ["8051e3b122b6e94f"]
+
+[[ignore]]
+fingerprint = "6f19a25d0ffb0037"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "line window (dupes-rust/src/parser.rs:1052-1056)",
+    "line window (dupes-rust/src/parser.rs:1077-1081)",
+    "line window (dupes-rust/src/parser.rs:1104-1108)",
+]
+member_fingerprints = ["b75cfadfc9b8b5f9"]
+
+[[ignore]]
+fingerprint = "69475be2cf716681"
+reason = "test pattern: CLI integration cargo_bin-assert tests"
+members = [
+    "line window (cargo-dupes/tests/ignore.rs:5-9)",
+    "line window (code-dupes/tests/ignore.rs:5-9)",
+]
+member_fingerprints = ["ab67975e6182090f"]
+
+[[ignore]]
+fingerprint = "2e5e185a05da6566"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:2062-2066)",
+    "line window (dupes-core/src/lib.rs:2097-2101)",
+]
+member_fingerprints = ["8bae3654d8934d7d"]
+
+[[ignore]]
+fingerprint = "206f190825b3046f"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line window (dupes-core/src/lib.rs:2194-2198)",
+    "line window (dupes-core/src/lib.rs:2219-2223)",
+]
+member_fingerprints = ["5e2a882662f47e82"]
+
+[[ignore]]
+fingerprint = "c38aeb1d2799204b"
+reason = "test pattern: node reindex tests"
+members = [
+    "line window (dupes-core/src/node.rs:428-432)",
+    "line window (dupes-core/src/node.rs:455-459)",
+]
+member_fingerprints = ["b43ce9d6ffbad27b"]
+
+[[ignore]]
+fingerprint = "34da3bb9968fda6d"
+reason = "test pattern: node reindex tests"
+members = [
+    "line window (dupes-core/src/node.rs:436-440)",
+    "line window (dupes-core/src/node.rs:463-467)",
+]
+member_fingerprints = ["f826b08255035bf1"]
+
+[[ignore]]
+fingerprint = "8695f5d0ad44b12f"
+reason = "test pattern: node reindex tests"
+members = [
+    "line window (dupes-core/src/node.rs:443-447)",
+    "line window (dupes-core/src/node.rs:470-474)",
+]
+member_fingerprints = ["23d3273b973a6d90"]
+
+[[ignore]]
+fingerprint = "0f89fc94d33822df"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "line window (dupes-core/src/output/json.rs:347-351)",
+    "line window (dupes-core/src/output/text.rs:492-496)",
+]
+member_fingerprints = ["035155d90c3caf28"]
+
+[[ignore]]
+fingerprint = "378eac9301482e17"
+reason = "test helper: output test scaffolding duplicated across json and text test modules"
+members = [
+    "line window (dupes-core/src/output/json.rs:353-357)",
+    "line window (dupes-core/src/output/text.rs:498-502)",
+]
+member_fingerprints = ["afe56c1e6496c46f"]
+
+[[ignore]]
+fingerprint = "ddd6ee240b719ac2"
+reason = "trait signature parity: Reporter::report_groups declaration repeated by the TextReporter impl signature"
+members = [
+    "line window (dupes-core/src/output/mod.rs:77-81)",
+    "line window (dupes-core/src/output/text.rs:366-370)",
+]
+member_fingerprints = ["a6732866048100b7"]
+
+[[ignore]]
+fingerprint = "9cf7ca02276f1f03"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:21-25)",
+    "line window (dupes-treesitter/tests/python_integration.rs:13-17)",
+]
+member_fingerprints = ["5e125adcdb97f211"]
+
+[[ignore]]
+fingerprint = "78f0957f5ceff02a"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:138-142)",
+    "line window (dupes-treesitter/tests/python_integration.rs:36-40)",
+]
+member_fingerprints = ["1b25ce7f2e58c8be"]
+
+[[ignore]]
+fingerprint = "13ea439456d1d843"
+reason = "builder-chain parity: python_mapping(), the treesitter unit-test mapping, and the integration-test mapping deliberately restate the Python NodeMapping builder chain so each layer's expectations stay independent"
+members = [
+    "line window (dupes-python/src/lib.rs:154-158)",
+    "line window (dupes-treesitter/tests/python_integration.rs:49-53)",
+]
+member_fingerprints = ["471b2b3442aed77c"]
+
+[[ignore]]
+fingerprint = "471c4f8c507bb416"
+reason = "test pattern: core-pipeline-with-Python tests"
+members = [
+    "line window (dupes-python/tests/core_with_python_tests.rs:32-36)",
+    "line window (dupes-python/tests/core_with_python_tests.rs:140-144)",
+]
+member_fingerprints = ["2c6312521183a3f5"]
+
+[[ignore]]
+fingerprint = "34ac3fe4011de8db"
+reason = "test pattern: core-pipeline-with-Python tests"
+members = [
+    "line window (dupes-python/tests/core_with_python_tests.rs:149-153)",
+    "line window (dupes-python/tests/core_with_python_tests.rs:169-173)",
+]
+member_fingerprints = ["3667e342327446ea"]
+
+[[ignore]]
+fingerprint = "fb4881e0e1f364dd"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:341-345)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:395-399)",
+]
+member_fingerprints = ["26fc557953aa6815"]
+
+[[ignore]]
+fingerprint = "014a87c6dfdc6c59"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:391-395)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:405-409)",
+]
+member_fingerprints = ["2971f8037d0a3f63"]
+
+[[ignore]]
+fingerprint = "c1485f7d7fa5ad33"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:486-490)",
+    "line window (dupes-rust/tests/core_with_syn_tests.rs:594-598)",
+]
+member_fingerprints = ["71522da021ec30e8"]
+
+[[ignore]]
+fingerprint = "17e722e5f72202c4"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "normalized token window (dupes-rust/src/parser.rs:645-663)",
+    "normalized token window (dupes-rust/src/parser.rs:670-689)",
+    "normalized token window (dupes-rust/src/parser.rs:724-741)",
+    "normalized token window (dupes-rust/src/parser.rs:747-762)",
+]
+member_fingerprints = ["996ece01324f79a3"]
+
+[[ignore]]
+fingerprint = "64a79156aa5abe0f"
+reason = "test pattern: parser test tagging tests"
+members = [
+    "normalized token window (dupes-rust/src/parser.rs:857-862)",
+    "normalized token window (dupes-rust/src/parser.rs:925-930)",
+]
+member_fingerprints = ["f80e2248ed47fd7d"]
+
+[[ignore]]
+fingerprint = "0e90eb67c79ac2b7"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "normalized token window (dupes-python/tests/integration.rs:72-85)",
+    "normalized token window (dupes-python/tests/integration.rs:111-123)",
+    "normalized token window (dupes-python/tests/integration.rs:126-141)",
+    "normalized token window (dupes-python/tests/integration.rs:146-160)",
+]
+member_fingerprints = ["3d78e1c3bdd187d7"]
+
+[[ignore]]
+fingerprint = "b8bf1d90b45d86f9"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "normalized token window (dupes-python/tests/integration.rs:596-608)",
+    "normalized token window (dupes-python/tests/integration.rs:709-720)",
+]
+member_fingerprints = ["ef569486f4d29152"]
+
+[[ignore]]
+fingerprint = "00c1b28195351fcf"
+reason = "test pattern: Python analyzer parse-compare tests"
+members = [
+    "normalized token window (dupes-python/tests/integration.rs:498-508)",
+    "normalized token window (dupes-python/tests/integration.rs:543-554)",
+]
+member_fingerprints = ["45482e13219a7501"]
+
+[[ignore]]
+fingerprint = "b2b52ae956088518"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "normalized token window (dupes-core/src/ignore.rs:229-236)",
+    "normalized token window (dupes-core/src/ignore.rs:475-482)",
+]
+member_fingerprints = ["3de619c002d30a13"]
+
+[[ignore]]
+fingerprint = "5faf5f89e13e2798"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "normalized token window (dupes-core/src/ignore.rs:309-316)",
+    "normalized token window (dupes-core/src/ignore.rs:331-338)",
+]
+member_fingerprints = ["073810b82e4a448b"]
+
+[[ignore]]
+fingerprint = "342859d9a20d00f9"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "normalized token window (dupes-core/src/ignore.rs:421-428)",
+    "normalized token window (dupes-core/src/ignore.rs:453-459)",
+]
+member_fingerprints = ["bf49874736830110"]
+
+[[ignore]]
+fingerprint = "ece6c41731384686"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "normalized token window (dupes-core/src/ignore.rs:351-353)",
+    "normalized token window (dupes-core/src/ignore.rs:369-371)",
+]
+member_fingerprints = ["4282f7c0b9ff77eb"]
+
+[[ignore]]
+fingerprint = "92aaedbe560f0769"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "normalized token window (dupes-core/src/ignore.rs:248-253)",
+    "normalized token window (dupes-core/src/ignore.rs:257-262)",
+]
+member_fingerprints = [
+    "31d40368e1d787ae",
+    "82ae6a69fc3d34d7",
+]
+
+[[ignore]]
+fingerprint = "4a008fc7004b7cda"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "raw token window (dupes-core/src/ignore.rs:309-316)",
+    "raw token window (dupes-core/src/ignore.rs:331-338)",
+]
+member_fingerprints = ["763e6143f3657693"]
+
+[[ignore]]
+fingerprint = "83bdbddbb554c161"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "raw token window (dupes-core/src/ignore.rs:351-353)",
+    "raw token window (dupes-core/src/ignore.rs:369-371)",
+]
+member_fingerprints = ["88a15a69d653a40e"]
+
+[[ignore]]
+fingerprint = "b5efdb285658284b"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "normalized token window (dupes-core/src/lib.rs:1864-1869)",
+    "normalized token window (dupes-core/src/lib.rs:2000-2005)",
+]
+member_fingerprints = ["e8aa878e7eafb758"]
+
+[[ignore]]
+fingerprint = "1bbf10d1f1f2b1c4"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "normalized token window (dupes-treesitter/src/normalizer.rs:583-586)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:596-599)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:626-629)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:640-643)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:653-656)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:666-669)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:679-682)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:693-696)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:816-819)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:831-834)",
+]
+member_fingerprints = ["a601fa6bc39d1b6c"]
+
+[[ignore]]
+fingerprint = "af452c8bf802cad3"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "normalized token window (dupes-treesitter/src/normalizer.rs:706-709)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:760-763)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:775-778)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:790-793)",
+    "normalized token window (dupes-treesitter/src/normalizer.rs:803-806)",
+]
+member_fingerprints = ["2e7bf0e76278e328"]
+
+[[ignore]]
+fingerprint = "f1088123ca2f3a6f"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "raw token window (dupes-treesitter/src/normalizer.rs:626-629)",
+    "raw token window (dupes-treesitter/src/normalizer.rs:640-643)",
+    "raw token window (dupes-treesitter/src/normalizer.rs:653-656)",
+    "raw token window (dupes-treesitter/src/normalizer.rs:666-669)",
+]
+member_fingerprints = ["50749524e854f13d"]
+
+[[ignore]]
+fingerprint = "1f3c63d22808f371"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "raw token window (dupes-treesitter/src/normalizer.rs:679-682)",
+    "raw token window (dupes-treesitter/src/normalizer.rs:693-696)",
+]
+member_fingerprints = ["a317bb3f7a091153"]
+
+[[ignore]]
+fingerprint = "eb4da6c21379765f"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "raw token window (dupes-treesitter/src/normalizer.rs:760-763)",
+    "raw token window (dupes-treesitter/src/normalizer.rs:775-778)",
+]
+member_fingerprints = ["ad0ab8ce9e67054a"]
+
+[[ignore]]
+fingerprint = "1824fbe30f57e615"
+reason = "test pattern: treesitter bridge integration tests"
+members = [
+    "normalized token window (dupes-treesitter/tests/python_integration.rs:273-275)",
+    "normalized token window (dupes-treesitter/tests/python_integration.rs:421-423)",
+    "normalized token window (dupes-treesitter/tests/python_integration.rs:436-438)",
+]
+member_fingerprints = ["3f76af61dd9b2806"]
+
+[[ignore]]
+fingerprint = "096f1300ee272710"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:1843-1852)",
+    "normalized token window (dupes-core/src/text_units.rs:1877-1881)",
+]
+member_fingerprints = [
+    "4054b9d411bfd21d",
+    "b6f0987ddd42ca05",
+]
+
+[[ignore]]
+fingerprint = "4e1415e988a106eb"
+reason = "test pattern: fingerprint identity tests"
+members = [
+    "normalized token window (dupes-core/src/fingerprint.rs:94-100)",
+    "normalized token window (dupes-core/src/fingerprint.rs:105-112)",
+]
+member_fingerprints = [
+    "90e2acf8bf4ccd46",
+    "a5a0de93329db748",
+]
+
+[[ignore]]
+fingerprint = "52add202244f6606"
+reason = "test pattern: extractor sub-unit tests"
+members = [
+    "normalized token window (dupes-core/src/extractor.rs:954-959)",
+    "normalized token window (dupes-core/src/extractor.rs:997-1002)",
+    "normalized token window (dupes-core/src/extractor.rs:1030-1036)",
+]
+member_fingerprints = [
+    "9648495205416d7b",
+    "cae8ec26aa0dc6e2",
+    "cd50bb30c6663d56",
+]
+
+[[ignore]]
+fingerprint = "a18f6c79021ea2b3"
+reason = "test pattern: extractor sub-unit tests"
+members = [
+    "normalized token window (dupes-core/src/extractor.rs:942-946)",
+    "normalized token window (dupes-core/src/extractor.rs:1043-1047)",
+]
+member_fingerprints = [
+    "3a436c5bc3d60d57",
+    "d9c9ca3a9c1afbf6",
+]
+
+[[ignore]]
+fingerprint = "f05960f567b46083"
+reason = "test pattern: parse-assert idiom shared across analyzer test suites"
+members = [
+    "normalized token window (dupes-rust/src/parser.rs:899-900)",
+    "normalized token window (dupes-core/src/extractor.rs:1132-1140)",
+]
+member_fingerprints = ["f504d9653616eec2"]
+
+[[ignore]]
+fingerprint = "b3d16d8328df3dc6"
+reason = "trait signature parity: std::fmt::Display impl heads (fmt signature and match-self dispatch) across enum Display impls"
+members = [
+    "normalized token window (code-dupes/src/main.rs:71-74)",
+    "normalized token window (dupes-core/src/grouper.rs:17-20)",
+    "normalized token window (dupes-core/src/cli.rs:55-58)",
+    "normalized token window (dupes-core/src/code_unit.rs:37-40)",
+    "normalized token window (dupes-core/src/code_unit.rs:69-72)",
+]
+member_fingerprints = ["db77cac9da366df9"]
+
+[[ignore]]
+fingerprint = "d93b63e75c3dd683"
+reason = "dimension parity: classify_token_window and classify_line_window deliberately share the classifier contract doc and head"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:634-638)",
+    "normalized token window (dupes-core/src/text_units.rs:917-921)",
+]
+member_fingerprints = ["1c3fc1254dad20e8"]
+
+[[ignore]]
+fingerprint = "0100fb7fc930d5db"
+reason = "structural-only match: per-line counting predicates with distinct thresholds (import-scaffold vs chain-tail)"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:1061-1067)",
+    "normalized token window (dupes-core/src/text_units.rs:1072-1077)",
+]
+member_fingerprints = [
+    "23978c1a0ad8aece",
+    "a9bdc1b82b2987fd",
+]
+
+[[ignore]]
+fingerprint = "5da4b55758a6fb5a"
+reason = "structural-only match: doc-comment-led fn heads pair by comment token shape; normalized comment words are uniform IDENTs"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:731-735)",
+    "normalized token window (dupes-core/src/lib.rs:603-607)",
+]
+member_fingerprints = [
+    "22a47d878bd8798c",
+    "77f86f17f842f483",
+]
+
+[[ignore]]
+fingerprint = "e1be1c85f6a297f0"
+reason = "API wrappers: one-line split_runs_by adapters with per-call predicates (window_token_lines, consecutive_runs)"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:841-843)",
+    "normalized token window (dupes-core/src/extractor.rs:250-252)",
+]
+member_fingerprints = [
+    "6ae13f42207542fc",
+    "bf4a1413303e9468",
+]
+
+[[ignore]]
+fingerprint = "fcfd98c36771ad44"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "macro_invocations_produce_macro_call (dupes-rust/src/normalizer/tests.rs:291-304)",
+    "vec_macro_normalized (dupes-rust/src/normalizer/tests.rs:328-337)",
+    "unparseable_macro_args_produce_opaque (dupes-rust/src/normalizer/tests.rs:358-368)",
+]
+member_fingerprints = [
+    "5b6d79bb6c8f0623",
+    "ce84c804a763397b",
+    "ec5edb3faef0f2bf",
+]
+
+[[ignore]]
+fingerprint = "016c0b6c078b5703"
+reason = "trivial: Fingerprint constructors hash a debug payload through from_bytes; the sig+body variant differs only by its two-part payload"
+members = [
+    "Fingerprint::from_debug (dupes-core/src/fingerprint.rs:21-23)",
+    "Fingerprint::from_sig_and_body (dupes-core/src/fingerprint.rs:33-35)",
+]
+member_fingerprints = [
+    "6563f06249275f63",
+    "fa8189eb3a511250",
+]
+
+[[ignore]]
+fingerprint = "6292a9aee1f74519"
+reason = "test pattern: extractor classifier counter-tests"
+members = [
+    "error_returns_with_payloads_stay_reported (dupes-core/src/extractor.rs:801-809)",
+    "return_some_value_stays_reportable (dupes-core/src/extractor.rs:834-841)",
+]
+member_fingerprints = [
+    "49d2f960ba51b09a",
+    "809225251b69cb64",
+]
+
+[[ignore]]
+fingerprint = "0f9b6a11fa64fac8"
+reason = "test pattern: ignore-file entry tests"
+members = [
+    "find_stale_entries_identifies_stale_vs_live (dupes-core/src/ignore.rs:348-363)",
+    "remove_stale_entries_removes_only_stale (dupes-core/src/ignore.rs:366-383)",
+]
+member_fingerprints = [
+    "8864a7b44abb1092",
+    "9436dfec36fa17e6",
+]
+
+[[ignore]]
+fingerprint = "ce0195c1c09b1f9e"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "two_identifiers_get_different_indices (dupes-treesitter/src/normalizer.rs:538-556)",
+    "same_identifier_reuses_index (dupes-treesitter/src/normalizer.rs:559-576)",
+]
+member_fingerprints = [
+    "ad54c087071e5feb",
+    "cc34a7127b22eb6c",
+]
+
+[[ignore]]
+fingerprint = "bac58e6820d37c6e"
+reason = "test pattern: config loading tests"
+members = [
+    "unknown_suppress_rule_ids_warn_without_failing (dupes-core/src/config.rs:353-364)",
+    "config_with_min_lines (dupes-core/src/config.rs:469-476)",
+]
+member_fingerprints = [
+    "cc3c4c7ef4474699",
+    "d9f50c4fe4217f98",
+]
+
+[[ignore]]
+fingerprint = "581aeaf84625aa0d"
+reason = "test pattern: analysis pipeline tests in dupes-core lib.rs"
+members = [
+    "line_only_config (dupes-core/src/lib.rs:1299-1306)",
+    "ast_only_config (dupes-core/src/lib.rs:1308-1315)",
+]
+member_fingerprints = [
+    "b2ad19719cea8bcd",
+    "b6703f4fbb31cedf",
+]
+
+[[ignore]]
+fingerprint = "c9615e7d42481330"
+reason = "test-support parity: the self-corpus gate restates the member-matching closure with ends_with file semantics; pairs with dupes-cli-test-support group_containing_member"
+members = [
+    "closure at ./dupes-cli-test-support/src/lib.rs:239 (dupes-cli-test-support/src/lib.rs:239-248)",
+    "closure at ./cargo-dupes/tests/self_corpus.rs:82 (cargo-dupes/tests/self_corpus.rs:82-91)",
+]
+member_fingerprints = [
+    "9257ccca85258564",
+    "f0a5306a59c287a3",
+]
+
+[[ignore]]
+fingerprint = "760f4ba92acc2785"
+reason = "test pattern: core-with-syn fixture tests"
+members = [
+    "near_duplicates_found (dupes-rust/tests/core_with_syn_tests.rs:332-353)",
+    "near_duplicates_exclude_exact (dupes-rust/tests/core_with_syn_tests.rs:396-407)",
+]
+member_fingerprints = [
+    "8e23c9055f165f4b",
+    "d73756daf40c6251",
+]
+
+[[ignore]]
+fingerprint = "076a5f277a337b1b"
+reason = "test pattern: core-pipeline-with-Python tests"
+members = [
+    "similarity_score_identical_bodies (dupes-python/tests/core_with_python_tests.rs:98-114)",
+    "similarity_score_different_bodies (dupes-python/tests/core_with_python_tests.rs:117-136)",
+]
+member_fingerprints = [
+    "545f5c0a920d65ef",
+    "72faf07b93da5f21",
+]
+
+[[ignore]]
+fingerprint = "8d6dd365acda99d6"
+reason = "test pattern: extractor classifier counter-tests"
+members = [
+    "guard_returns_wrapping_values_stay_reported (dupes-core/src/extractor.rs:775-785)",
+    "plumbing_dispatch_return_is_tagged_value_plumbing (dupes-core/src/extractor.rs:812-831)",
+]
+member_fingerprints = [
+    "503322cf37ceed58",
+    "51ecf50dfde7d4ea",
+]
+
+[[ignore]]
+fingerprint = "3e4a4f510072b4da"
+reason = "test pattern: parser extraction tests"
+members = [
+    "extracts_top_level_functions (dupes-rust/src/parser.rs:629-649)",
+    "duplicate_functions_same_fingerprint (dupes-rust/src/parser.rs:735-755)",
+]
+member_fingerprints = [
+    "0c5c7a5c37641eff",
+    "640490ab870b1791",
+]
+
+[[ignore]]
+fingerprint = "99e07b2f10745365"
+reason = "test pattern: parse-assert idiom shared across analyzer test suites"
+members = [
+    "decorated_functions_are_parsed (dupes-python/tests/integration.rs:402-416)",
+    "constant_binding_wrappers_remain_units (dupes-rust/src/parser.rs:1278-1291)",
+]
+member_fingerprints = [
+    "dddf2c7720fbc6c2",
+    "eed14b83190898cd",
+]
+
+[[ignore]]
+fingerprint = "8b4b0db92c7c40d4"
+reason = "test helper: dupes-cli-test-support conversion helpers"
+members = [
+    "compiled_binary (dupes-cli-test-support/src/lib.rs:71-73)",
+    "json_from_text (dupes-cli-test-support/src/lib.rs:185-187)",
+]
+member_fingerprints = [
+    "cf8755c5dd7653d1",
+    "fa88bc3cce817f9c",
+]
+
+[[ignore]]
+fingerprint = "43c5d6a5d2007471"
+reason = "trivial: From conversions wrap CliError variants"
+members = [
+    "<CliError as From>::from (dupes-core/src/cli.rs:93-95)",
+    "<CliError as From>::from (dupes-core/src/cli.rs:99-101)",
+]
+member_fingerprints = [
+    "43e4f90943757039",
+    "45369c88f87422cd",
+]
+
+[[ignore]]
+fingerprint = "95b39cf02cab8b56"
+reason = "test-support parity: the self-corpus gate restates the member-matching closure with ends_with file semantics; pairs with dupes-cli-test-support group_containing_member"
+members = [
+    "closure at ./dupes-cli-test-support/src/lib.rs:240 (dupes-cli-test-support/src/lib.rs:240-247)",
+    "closure at ./cargo-dupes/tests/self_corpus.rs:83 (cargo-dupes/tests/self_corpus.rs:83-90)",
+]
+member_fingerprints = [
+    "811a94fb89d3d195",
+    "e6f223852d27218e",
+]
+
+[[ignore]]
+fingerprint = "58d708e86cffa245"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "return_with_value (dupes-treesitter/src/normalizer.rs:720-736)",
+    "return_without_value (dupes-treesitter/src/normalizer.rs:739-753)",
+]
+member_fingerprints = [
+    "5085ac6ac6fe0bb1",
+    "82485fce212d6c7d",
+]
+
+[[ignore]]
+fingerprint = "2da3508b44de223e"
+reason = "test pattern: similarity score tests"
+members = [
+    "identical_leaves_score_one (dupes-core/src/similarity.rs:62-66)",
+    "both_none_sentinels_score_one (dupes-core/src/similarity.rs:76-80)",
+]
+member_fingerprints = [
+    "5b076b5ee8723d0c",
+    "ba9256a927ce460d",
+]
+
+[[ignore]]
+fingerprint = "9fa969ab72788251"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "normalized_token_windows_for (dupes-core/src/text_units.rs:1446-1453)",
+    "line_windows_for (dupes-core/src/text_units.rs:1455-1461)",
+]
+member_fingerprints = [
+    "1e9d32b0ce34b10d",
+    "565f58f96c2dfc2c",
+]
+
+[[ignore]]
+fingerprint = "ffb78d9f5c2b749c"
+reason = "test pattern: grouper grouping and percentage tests"
+members = [
+    "exact_group_fingerprint_ignores_locations (dupes-core/src/grouper.rs:494-510)",
+    "near_group_fingerprint_ignores_locations (dupes-core/src/grouper.rs:513-531)",
+]
+member_fingerprints = [
+    "041344764c47b834",
+    "5032b7db6268cf2a",
+]
+
+[[ignore]]
+fingerprint = "7232ae607b883286"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "match_arms_normalized (dupes-rust/src/normalizer/tests.rs:149-156)",
+    "loop_normalized (dupes-rust/src/normalizer/tests.rs:468-472)",
+]
+member_fingerprints = [
+    "08b5a0b4886b90f5",
+    "f217caaf9e94f800",
+]
+
+[[ignore]]
+fingerprint = "60f96719dd72b74f"
+reason = "test pattern: treesitter normalizer unit tests"
+members = [
+    "identifier_becomes_placeholder (dupes-treesitter/src/normalizer.rs:519-533)",
+    "block_normalization (dupes-treesitter/src/normalizer.rs:870-881)",
+]
+member_fingerprints = [
+    "9a4d9128954da34c",
+    "a1da91d120fde40b",
+]
+
+[[ignore]]
+fingerprint = "73195fc0b815c02d"
+reason = "test pattern: runs splitting tests"
+members = [
+    "single_run_stays_whole (dupes-core/src/runs.rs:36-40)",
+    "gaps_split_into_multiple_runs (dupes-core/src/runs.rs:43-47)",
+]
+member_fingerprints = [
+    "fc06a8636a53abd3",
+    "fd24c2fc292cd3cc",
+]
+
+[[ignore]]
+fingerprint = "6cf05a7bce9f565b"
+reason = "trivial: single-expression character-class closures"
+members = [
+    "closure at ./dupes-core/src/text_units.rs:600 (dupes-core/src/text_units.rs:600-600)",
+    "closure at ./dupes-core/src/text_units.rs:1153 (dupes-core/src/text_units.rs:1153-1153)",
+]
+member_fingerprints = [
+    "93506e8de6dfcc6f",
+    "9e333ad46070a675",
+]
+
+[[ignore]]
+fingerprint = "8a07ff4eb3a73668"
+reason = "normalizer backend parity: the syn and tree-sitter normalizers recurse children through the same closure shape"
+members = [
+    "closure at ./dupes-treesitter/src/normalizer.rs:395 (dupes-treesitter/src/normalizer.rs:395-397)",
+    "closure at ./dupes-rust/src/normalizer/helpers.rs:57 (dupes-rust/src/normalizer/helpers.rs:57-59)",
+]
+member_fingerprints = [
+    "4fd98080aafcb050",
+    "5f246ad98c214927",
+]
+
+[[ignore]]
+fingerprint = "19a716d4baf5496e"
+reason = "classifier dispatch arms: each suppression check returns its own rule id; the table shape is forced by the rule registry"
+members = [
+    "if-then branch (dupes-core/src/text_units.rs:622-624)",
+    "match arm 2 (dupes-core/src/text_units.rs:641-643)",
+]
+member_fingerprints = ["7aecba38c5c8cd6e"]
+
+[[ignore]]
+fingerprint = "5b419ad64b54ad2e"
+reason = "classifier dispatch arms: each suppression check returns its own rule id; the table shape is forced by the rule registry"
+members = [
+    "if-else branch (dupes-core/src/text_units.rs:188-190)",
+    "if-else branch (dupes-core/src/text_units.rs:636-638)",
+]
+member_fingerprints = ["0dc74fe0034363ab"]
+
+[[ignore]]
+fingerprint = "66d74e91ae1ccfb4"
+reason = "classifier dispatch arms: each suppression check returns its own rule id; the table shape is forced by the rule registry"
+members = [
+    "match arm 3 (dupes-core/src/text_units.rs:644-647)",
+    "match arm 4 (dupes-core/src/text_units.rs:648-651)",
+]
+member_fingerprints = ["5c071a287dea6e3e"]
+
+[[ignore]]
+fingerprint = "e9a4d70065628280"
+reason = "normalizer dispatch arms: syn expression arms recurse children into with_children per node kind"
+members = [
+    "match arm 5 (dupes-rust/src/normalizer/expr.rs:29-33)",
+    "match arm 9 (dupes-rust/src/normalizer/expr.rs:62-66)",
+]
+member_fingerprints = [
+    "541d26b70e888ee1",
+    "eadb58c0a20acf78",
+]
+
+[[ignore]]
+fingerprint = "aac3634af2e9a66c"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "if-then branch (dupes-rust/src/normalizer/tests.rs:399-402)",
+    "if-then branch (dupes-rust/src/normalizer/tests.rs:390-393)",
+]
+member_fingerprints = [
+    "9249c14a4c45190b",
+    "db0a45ed796024a4",
+]
+
+[[ignore]]
+fingerprint = "2900e94cd0fbbec3"
+reason = "test-support parity: the self-corpus gate restates the member-matching closure with ends_with file semantics; pairs with dupes-cli-test-support group_containing_member"
+members = [
+    "closure body (cargo-dupes/tests/self_corpus.rs:82-91)",
+    "closure body (dupes-cli-test-support/src/lib.rs:239-248)",
+]
+member_fingerprints = [
+    "2102b1519a2a50a3",
+    "ce95b245adeb55de",
+]
+
+[[ignore]]
+fingerprint = "af5a5424e05a574a"
+reason = "trivial: tokenizer guard branches share the skip/advance shape"
+members = [
+    "if-then branch (dupes-core/src/text_units.rs:181-183)",
+    "if-then branch (dupes-core/src/text_units.rs:130-133)",
+]
+member_fingerprints = [
+    "3aa5abe719f7a5cd",
+    "c09c9b464b36e667",
+]
+
+[[ignore]]
+fingerprint = "1418b571430100cb"
+reason = "test pattern: normalizer parse-assert tests"
+members = [
+    "match arm 1 (dupes-rust/src/normalizer/tests.rs:361-365)",
+    "match arm 1 (dupes-rust/src/normalizer/tests.rs:294-301)",
+]
+member_fingerprints = [
+    "70acc63cb073fc71",
+    "b32be75caad4e1eb",
+]
+
+[[ignore]]
+fingerprint = "2c017d43319f9461"
+reason = "test-support parity: the self-corpus gate restates the member-matching closure with ends_with file semantics; pairs with dupes-cli-test-support group_containing_member"
+members = [
+    "closure body (cargo-dupes/tests/self_corpus.rs:83-90)",
+    "closure body (dupes-cli-test-support/src/lib.rs:240-247)",
+]
+member_fingerprints = [
+    "0f9bb879675e817a",
+    "ca7f90ddec00ccbe",
+]
+
+[[ignore]]
+fingerprint = "7473115821930f74"
+reason = "test pattern: for-body fixtures shared across core test modules"
+members = [
+    "for body (dupes-core/src/extractor.rs:1124-1126)",
+    "for body (dupes-core/src/text_units.rs:1466-1468)",
+]
+member_fingerprints = [
+    "8cc1b63af2db292f",
+    "9dd4c7994249ee3a",
+]
+
+[[ignore]]
+fingerprint = "64389aa53e2684ee"
+reason = "trivial: guard branches share the conditional-update shape"
+members = [
+    "if-then branch (dupes-core/src/grouper.rs:273-275)",
+    "if-then branch (dupes-core/src/text_units.rs:184-186)",
+]
+member_fingerprints = [
+    "1d0879398408335b",
+    "5ac6ad8386f65278",
+]
+
+[[ignore]]
+fingerprint = "b2250006d449d3e7"
+reason = "test pattern: token-window scaffolding fixtures repeated across reject and attribute tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:1477-1487)",
+    "line window (dupes-core/src/text_units.rs:1538-1548)",
+]
+member_fingerprints = ["70e1159f57712fa9"]
+
+[[ignore]]
+fingerprint = "9dbdc9c9472d4132"
+reason = "test pattern: token-window scaffolding fixtures repeated across reject and attribute tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:1498-1507)",
+    "line window (dupes-core/src/text_units.rs:1569-1578)",
+]
+member_fingerprints = ["2caaecbe18690e1e"]
+
+[[ignore]]
+fingerprint = "0f17c192193cff71"
+reason = "test pattern: token-window scaffolding fixtures repeated across reject and attribute tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:1488-1495)",
+    "line window (dupes-core/src/text_units.rs:1553-1560)",
+]
+member_fingerprints = ["9a0ddfb118d2652d"]
+
+[[ignore]]
+fingerprint = "d17c0b8e807f2b39"
+reason = "test pattern: token-window scaffolding fixtures repeated across reject and attribute tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:1447-1451)",
+    "line window (dupes-core/src/text_units.rs:1513-1517)",
+]
+member_fingerprints = ["842f1a69ede701ab"]
+
+[[ignore]]
+fingerprint = "e673dbe8800a9302"
+reason = "detector fixture parity: the declaration-scaffold fixture string restates config.rs's DimensionConfig table"
+members = [
+    "line window (dupes-core/src/config.rs:116-122)",
+    "line window (dupes-core/src/text_units.rs:1499-1505)",
+    "line window (dupes-core/src/text_units.rs:1570-1576)",
+]
+member_fingerprints = ["413cf6ed1198bc0d"]
+
+[[ignore]]
+fingerprint = "047e1bcf8a74aef3"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:1841-1848)",
+    "line window (dupes-core/src/text_units.rs:1895-1902)",
+]
+member_fingerprints = ["847b73b5a6f98b8f"]
+
+[[ignore]]
+fingerprint = "d726c6a8b4467237"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:2066-2073)",
+    "line window (dupes-core/src/text_units.rs:2232-2239)",
+]
+member_fingerprints = ["5bff90a0ba2ad44e"]
+
+[[ignore]]
+fingerprint = "9bfca9870f21945e"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:2022-2028)",
+    "line window (dupes-core/src/text_units.rs:2116-2122)",
+    "line window (dupes-core/src/text_units.rs:2214-2220)",
+]
+member_fingerprints = ["23f2242e91cfb9d4"]
+
+[[ignore]]
+fingerprint = "34eb258d6c156d52"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:1435-1441)",
+    "line window (dupes-core/src/text_units.rs:1779-1785)",
+]
+member_fingerprints = ["e5a21d9930ad181d"]
+
+[[ignore]]
+fingerprint = "922776f289bc74cf"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:2113-2119)",
+    "line window (dupes-core/src/text_units.rs:2211-2217)",
+]
+member_fingerprints = ["b2f7bd0bab983714"]
+
+[[ignore]]
+fingerprint = "1bbf807df8d9d224"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:2171-2175)",
+    "line window (dupes-core/src/text_units.rs:2190-2194)",
+    "line window (dupes-core/src/text_units.rs:2209-2213)",
+    "line window (dupes-core/src/text_units.rs:2230-2234)",
+    "line window (dupes-core/src/text_units.rs:2247-2251)",
+    "line window (dupes-core/src/text_units.rs:2264-2268)",
+    "line window (dupes-core/src/text_units.rs:2281-2285)",
+]
+member_fingerprints = ["a037e242c17598ba"]
+
+[[ignore]]
+fingerprint = "a65e89d8536d6170"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:2016-2020)",
+    "line window (dupes-core/src/text_units.rs:2110-2114)",
+    "line window (dupes-core/src/text_units.rs:2133-2137)",
+    "line window (dupes-core/src/text_units.rs:2151-2155)",
+]
+member_fingerprints = ["42e0a7d51b5907e3"]
+
+[[ignore]]
+fingerprint = "6d9302cbdd360077"
+reason = "test pattern: text-units window eligibility tests"
+members = [
+    "line window (dupes-core/src/text_units.rs:1936-1940)",
+    "line window (dupes-core/src/text_units.rs:2064-2068)",
+]
+member_fingerprints = ["ccbdaa91ce7dd4ae"]
+
+[[ignore]]
+fingerprint = "0aca2cfb508d33ce"
+reason = "test helper: window/unit builder stanzas duplicated across core test modules"
+members = [
+    "line window (dupes-core/src/lib.rs:1268-1272)",
+    "line window (dupes-core/src/text_units.rs:1298-1302)",
+]
+member_fingerprints = ["3d3a8124318163b8"]
+
+[[ignore]]
+fingerprint = "c81ec16460dd5ee1"
+reason = "test helper: window/unit builder stanzas duplicated across core test modules"
+members = [
+    "line window (dupes-core/src/lib.rs:1279-1283)",
+    "line window (dupes-core/src/text_units.rs:1309-1313)",
+]
+member_fingerprints = ["47a851b113b90e4c"]
+
+[[ignore]]
+fingerprint = "2cb4620f973e732d"
+reason = "trivial: line-classifier predicates chain starts_with/contains probes, so their normalized token windows converge"
+members = [
+    "normalized token window (dupes-core/src/text_units.rs:1113-1118)",
+    "normalized token window (dupes-core/src/text_units.rs:1152-1157)",
+]
+member_fingerprints = [
+    "26ddb45d58706f62",
+    "c3d3f65e6a623985",
+]

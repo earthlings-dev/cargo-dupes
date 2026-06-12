@@ -46,7 +46,9 @@ pub fn normalize_signature(sig: &syn::Signature, ctx: &mut NormalizationContext)
 
 // -- Public entry points ------------------------------------------------------
 
-fn normalize_fn_parts(
+/// Normalize any function-like item from its signature and body block.
+#[must_use]
+pub fn normalize_fn_like(
     sig: &syn::Signature,
     block: &syn::Block,
 ) -> (NormalizedNode, NormalizedNode) {
@@ -59,13 +61,7 @@ fn normalize_fn_parts(
 /// Normalize a top-level function.
 #[must_use]
 pub fn normalize_item_fn(func: &syn::ItemFn) -> (NormalizedNode, NormalizedNode) {
-    normalize_fn_parts(&func.sig, &func.block)
-}
-
-/// Normalize a method within an impl block.
-#[must_use]
-pub fn normalize_impl_item_fn(method: &syn::ImplItemFn) -> (NormalizedNode, NormalizedNode) {
-    normalize_fn_parts(&method.sig, &method.block)
+    normalize_fn_like(&func.sig, &func.block)
 }
 
 /// Normalize a closure expression.
@@ -90,7 +86,7 @@ pub fn normalize_impl_block(imp: &syn::ItemImpl) -> Vec<(String, NormalizedNode,
         .filter_map(|item| {
             if let syn::ImplItem::Fn(method) = item {
                 let name = method.sig.ident.to_string();
-                let (sig, body) = normalize_impl_item_fn(method);
+                let (sig, body) = normalize_fn_like(&method.sig, &method.block);
                 Some((name, sig, body))
             } else {
                 None

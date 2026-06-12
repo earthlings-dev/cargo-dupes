@@ -59,14 +59,18 @@ pub fn extract_code_units(
     let mut units = Vec::new();
 
     while let Some(m) = matches.next() {
-        let def_node: Option<tree_sitter::Node> =
-            def_idx.and_then(|idx| m.captures.iter().find(|c| c.index == idx).map(|c| c.node));
-        let name_node: Option<tree_sitter::Node> =
-            name_idx.and_then(|idx| m.captures.iter().find(|c| c.index == idx).map(|c| c.node));
-        let body_node: Option<tree_sitter::Node> =
-            body_idx.and_then(|idx| m.captures.iter().find(|c| c.index == idx).map(|c| c.node));
-        let params_node: Option<tree_sitter::Node> =
-            params_idx.and_then(|idx| m.captures.iter().find(|c| c.index == idx).map(|c| c.node));
+        let capture_node = |idx: Option<u32>| {
+            idx.and_then(|idx| {
+                m.captures
+                    .iter()
+                    .find(|capture| capture.index == idx)
+                    .map(|capture| capture.node)
+            })
+        };
+        let def_node = capture_node(def_idx);
+        let name_node = capture_node(name_idx);
+        let body_node = capture_node(body_idx);
+        let params_node = capture_node(params_idx);
 
         // We need at least a definition and body to create a code unit
         let Some(def) = def_node else { continue };
@@ -114,6 +118,8 @@ pub fn extract_code_units(
         let test_code = is_test(&name, def);
 
         units.push(CodeUnit {
+            suppressed: None,
+            parent_chain: None,
             kind: kind_for_node(def.kind()),
             name,
             file: file_path.to_path_buf(),

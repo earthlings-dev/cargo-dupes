@@ -1,116 +1,16 @@
+// jscpd:ignore-start
+
 mod common;
 
-use common::{cargo_dupes, fixture_path};
-use predicates::prelude::*;
-
-#[test]
-fn check_no_thresholds_passes_with_duplicates() {
-    // With no thresholds set, check should pass even when duplicates exist
-    cargo_dupes()
-        .args([
-            "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
-            "check",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Check passed"));
+dupes_cli_test_support::cli_support_tests! {
+    common::cargo_dupes;
+    check_no_thresholds_passes_with_duplicates => dupes_cli_test_support::check_no_thresholds_passes_with_duplicates;
+    check_fails_with_duplicates => dupes_cli_test_support::check_fails_with_duplicates;
+    check_passes_with_high_threshold => dupes_cli_test_support::check_passes_with_high_threshold;
+    check_no_dupes_passes => dupes_cli_test_support::check_no_dupes_passes;
+    check_fails_with_percentage_threshold_exceeded => dupes_cli_test_support::check_fails_with_percentage_threshold_exceeded;
+    check_passes_with_generous_percentage_threshold => dupes_cli_test_support::check_passes_with_generous_percentage_threshold;
+    check_absolute_passes_percentage_fails => dupes_cli_test_support::check_absolute_passes_percentage_fails;
 }
 
-#[test]
-fn check_fails_with_duplicates() {
-    cargo_dupes()
-        .args([
-            "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
-            "check",
-            "--max-exact",
-            "0",
-        ])
-        .assert()
-        .code(1)
-        .stdout(predicate::str::contains("Check FAILED"));
-}
-
-#[test]
-fn check_passes_with_high_threshold() {
-    cargo_dupes()
-        .args([
-            "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
-            "check",
-            "--max-exact",
-            "100",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Check passed"));
-}
-
-#[test]
-fn check_no_dupes_passes() {
-    cargo_dupes()
-        .args([
-            "--path",
-            fixture_path("no_dupes").to_str().unwrap(),
-            "check",
-            "--max-exact",
-            "0",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Check passed"));
-}
-
-#[test]
-fn check_fails_with_percentage_threshold_exceeded() {
-    cargo_dupes()
-        .args([
-            "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
-            "check",
-            "--max-exact",
-            "100",
-            "--max-exact-percent",
-            "0.0",
-        ])
-        .assert()
-        .code(1)
-        .stdout(predicate::str::contains("Check FAILED"))
-        .stdout(predicate::str::contains("exact duplicate lines"));
-}
-
-#[test]
-fn check_passes_with_generous_percentage_threshold() {
-    cargo_dupes()
-        .args([
-            "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
-            "check",
-            "--max-exact",
-            "100",
-            "--max-exact-percent",
-            "100.0",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Check passed"));
-}
-
-#[test]
-fn check_absolute_passes_percentage_fails() {
-    // Absolute threshold is generous (passes), but percentage is strict (fails)
-    cargo_dupes()
-        .args([
-            "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
-            "check",
-            "--max-exact",
-            "100",
-            "--max-exact-percent",
-            "0.0",
-        ])
-        .assert()
-        .code(1)
-        .stdout(predicate::str::contains("Check FAILED"));
-}
+// jscpd:ignore-end

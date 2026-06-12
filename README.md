@@ -1,39 +1,39 @@
 # cargo-dupes
 
-A cargo subcommand that detects duplicate and near-duplicate code blocks in Rust codebases.
-The workspace also ships `code-dupes`, a multi-language CLI that combines
-language-aware AST analysis with generic token and line duplicate detection for
-code and text files.
+A cargo subcommand that detects duplicate and near-duplicate code blocks in Rust codebases. The workspace also ships `code-dupes`, a multi-language CLI that combines language-aware AST analysis with generic token and line duplicate detection for code and text files.
 
 ## How It Works
 
 `cargo-dupes` parses Rust source files into ASTs using [syn](https://github.com/dtolnay/syn), then normalizes each function, method, closure, and nested control-flow region into a canonical form where:
 
-- **Identifiers are replaced** with positional placeholders (so `foo(x)` and `bar(y)` are identical)
+- **Identifiers are replaced** with positional placeholders (so `foo(x)` and `bar(y)` are identical) — except method names, which are preserved (`x.is_ascii_alphabetic()` never matches `x.is_ascii_alphanumeric()`)
 - **Literal values are erased** but types preserved (`42` and `99` are both "integer literal")
 - **Control flow structure is preserved** exactly
-- **Macro invocations become opaque** nodes
+- **Macro invocations keep their names** with arguments normalized (`println!("a")` matches `println!("b")` but never `eprintln!`)
 
 This normalized AST is hashed with deterministic `blake3`-based fingerprints for exact duplicate detection, and compared tree-by-tree using the Dice coefficient for near-duplicate detection. The same pipeline also runs generic token and line-window detection so macro-heavy, config-like, prose, and non-AST-friendly duplication can be found without a separate tool.
 
 Detection dimensions:
 
 - **AST** — whole functions, methods, trait impl methods, and closures.
-- **Sub-AST** — nested `if` branches, `match` arms, loop bodies, closure bodies, and significant blocks. This is enabled by default.
+- **Sub-AST** — nested `if` branches and chains, `match` arms, loop bodies, closure bodies, and significant blocks. This is opt-in via `--sub-function` or `sub_function = true`.
 - **Normalized tokens** — identifier/literal-insensitive token windows.
 - **Raw tokens** — whitespace-insensitive exact token windows.
 - **Lines** — trimmed, whitespace-normalized line windows.
 
+Low-signal shapes (trivial guard returns, message-only macro branches, builder setters, signature prefixes, declaration scaffolds, cut match-table prefixes, ...) are tagged by a global suppression-rule registry rather than dropped: the default report hides fully tagged groups, `--show-suppressed` reveals them, `-v` attributes them per rule, and `--disable-rule`/`--enable-rule` (or `[suppress]` in config) toggle individual rules. Suppression is separate from ignore policy: the detector extracts, tags, and groups candidates first, then the per-project `.dupes-ignore.toml` registry filters adjudicated intentional groups from the report. See [`DETECTOR_REPORTABILITY.md`](DETECTOR_REPORTABILITY.md) for the full contract, including the rule table and the guarantees that keep the detector ignore-blind.
+
 ## Installation
 
 ```sh
-cargo install --path .
+cargo install --path cargo-dupes   # the cargo subcommand
+cargo install --path code-dupes    # optional: the multi-language CLI
 ```
 
-Or, to run directly:
+Or, to run directly from the workspace:
 
 ```sh
-cargo run -- report
+cargo run -p cargo-dupes -- report
 ```
 
 When installed, it's available as a cargo subcommand:
@@ -53,22 +53,37 @@ Commands:
   check    Check for duplicates and exit with non-zero if thresholds exceeded
   ignore   Add a fingerprint to the ignore list
   ignored  List all ignored fingerprints
+  cleanup  Remove stale entries from the ignore list (--dry-run to list only)
 
 Options:
   -p, --path <PATH>            Path to analyze (defaults to current directory)
       --min-nodes <MIN_NODES>  Minimum AST node count for analysis [default: 10]
       --min-lines <MIN_LINES>  Minimum source line count for analysis [default: 0 (disabled)]
-      --threshold <THRESHOLD>  Similarity threshold for near-duplicates (0.0-1.0) [default: 0.9]
+      --threshold <THRESHOLD>  Similarity threshold for near-duplicates (0.0-1.0) [default: 0.8]
       --format <FORMAT>        Output format [default: text] [possible values: text, json]
       --exclude <EXCLUDE>      Exclude patterns (can be repeated)
       --exclude-tests          Exclude test code (#[test] functions and #[cfg(test)] modules)
-  -s, --sub-function           Enable sub-function duplicate detection (enabled by default)
-      --no-sub-function        Disable sub-function duplicate detection
+  -s, --sub-function           Enable sub-function duplicate detection
+      --no-sub-function        Disable sub-function duplicate detection when enabled by config
       --min-sub-nodes <N>      Minimum AST node count for sub-function units [default: 5]
+      --show-suppressed        Include rule-suppressed duplicate groups in the report body
+  -v, --verbose                Verbose statistics: per-rule suppression breakdown
+      --disable-rule <RULE_ID> Disable a suppression/admission rule by id (can be repeated)
+      --enable-rule <RULE_ID>  Enable a rule by id (can be repeated; overrides config disable)
+      --dimension <D>          Enable only a dimension: ast, sub-ast, token-normalized, token-raw, line
       --disable-dimension <D>  Disable a dimension: ast, sub-ast, token-normalized, token-raw, line
       --token-min-tokens <N>   Minimum token count for token windows [default: 50]
+      --token-min-lines <N>    Minimum source line span for token windows [default: 2]
       --token-threshold <T>    Similarity threshold for normalized token near-duplicates [default: 0.9]
       --line-min-lines <N>     Minimum line count for line windows [default: 5]
+```
+
+### `code-dupes`
+
+`code-dupes` shares the same subcommands and options, adds `-l, --language <rust|python|generic>`, and is invoked directly (no cargo subcommand shim). Without `--language` it auto-detects from file extensions: a single known language runs directly, several known languages produce an error asking for `--language`, and directories with only generic text (Markdown, TOML, YAML, JSON, shell, ...) fall back to token/line detection.
+
+```sh
+$ code-dupes --path ./src --language python report
 ```
 
 ### Examples
@@ -126,7 +141,9 @@ $ cargo dupes --format json stats
   "exact_duplicate_lines": 18,
   "near_duplicate_lines": 0,
   "exact_duplicate_percent": 50.0,
-  "near_duplicate_percent": 0.0
+  "near_duplicate_percent": 0.0,
+  "suppressed_unit_count": 0,
+  "suppressed_group_count": 0
 }
 ```
 
@@ -190,11 +207,22 @@ $ cargo dupes --min-lines 10 report
 $ cargo dupes --threshold 0.7 report
 ```
 
-**Disable a noisy dimension temporarily:**
+**Enable or disable a noisy dimension temporarily:**
 
 ```sh
+$ cargo dupes --dimension ast report
+$ cargo dupes --dimension line stats
 $ cargo dupes --disable-dimension line report
-$ cargo dupes --no-sub-function report
+$ cargo dupes --sub-function report
+$ cargo dupes --no-sub-function report  # when sub_function = true is set in config
+```
+
+**Inspect or toggle suppressed findings:**
+
+```sh
+$ cargo dupes --sub-function --show-suppressed report  # render tagged groups in their own sections
+$ cargo dupes -v stats                                 # per-rule suppression breakdown
+$ cargo dupes --disable-rule line.chain-tail report    # make one rule's findings fully visible
 ```
 
 ## Configuration
@@ -229,10 +257,15 @@ line = true
 
 [token]
 min_tokens = 50
+min_lines = 2
 similarity_threshold = 0.9
 
 [line]
 min_lines = 5
+
+[suppress]
+disable = ["line.chain-tail"]
+enable = []
 ```
 
 ### `Cargo.toml`
@@ -250,10 +283,10 @@ exclude = ["tests"]
 |--------|---------|-------------|
 | `min_nodes` | `10` | Minimum AST node count for a code unit to be analyzed. Increase to skip trivial functions. |
 | `min_lines` | `0` | Minimum source line count for a code unit to be analyzed. `0` means disabled. |
-| `similarity_threshold` | `0.9` | Minimum similarity score (0.0-1.0) for near-duplicate detection. |
+| `similarity_threshold` | `0.8` | Minimum similarity score (0.0-1.0) for near-duplicate detection. |
 | `exclude` | `[]` | Glob-like path patterns to exclude from scanning. |
 | `exclude_tests` | `false` | Exclude `#[test]` functions and `#[cfg(test)]` modules from analysis. |
-| `sub_function` | `true` | Enable nested sub-function duplicate detection. |
+| `sub_function` | `false` | Enable nested sub-function duplicate detection. |
 | `min_sub_nodes` | `5` | Minimum AST node count for sub-function units. |
 | `[dimensions].ast` | `true` | Enable whole-unit AST duplicate detection. |
 | `[dimensions].sub_ast` | `true` | Enable nested AST duplicate detection. |
@@ -261,8 +294,11 @@ exclude = ["tests"]
 | `[dimensions].token_raw` | `true` | Enable raw token-window exact duplicate detection. |
 | `[dimensions].line` | `true` | Enable normalized line-window exact duplicate detection. |
 | `[token].min_tokens` | `50` | Minimum token count for token windows. |
+| `[token].min_lines` | `2` | Minimum source line span for token windows. Use `1` to include dense one-line token matches. |
 | `[token].similarity_threshold` | `0.9` | Minimum score for normalized token near-duplicates. |
 | `[line].min_lines` | `5` | Minimum line count for line windows. |
+| `[suppress].disable` | `[]` | Suppression/admission rule ids to disable (registry in [`DETECTOR_REPORTABILITY.md`](DETECTOR_REPORTABILITY.md)). Unknown ids warn, never error. |
+| `[suppress].enable` | `[]` | Rule ids to re-enable; CLI `--enable-rule` overrides config disables. |
 | `max_exact_duplicates` | `None` | For `check` subcommand: maximum allowed exact duplicate groups. |
 | `max_near_duplicates` | `None` | For `check` subcommand: maximum allowed near-duplicate groups. |
 | `max_exact_percent` | `None` | For `check` subcommand: maximum allowed exact duplicate line percentage. |
@@ -287,7 +323,9 @@ $ cargo dupes report
 # The ignored group will not appear
 ```
 
-The ignore list is stored in `.dupes-ignore.toml` in the project root.
+The ignore list is stored in `.dupes-ignore.toml` in the project root. Fingerprints are stable for the duplicate pattern: they include the detection dimension, match kind, and normalized content, but not file paths or line numbers. Moving a duplicated block should not make the ignore entry stale. When `ignore` matches a live group, the entry also records the member locations and their content fingerprints, so near-duplicate entries survive membership drift; `cleanup` (or `cleanup --dry-run`) removes or lists entries whose duplication no longer exists, suggesting possible successor groups.
+
+`--exclude-tests` only removes code units that the active language analyzer tags as tests, such as Rust `#[test]` functions and `#[cfg(test)]` modules. It does not exclude generic text files like Markdown, TOML, shell scripts, or JSON; use `--exclude` for path-based filtering of those files.
 
 ## CI Integration
 
@@ -312,7 +350,7 @@ Exit codes:
 | **Methods** | `fn` items inside `impl` blocks |
 | **Trait impls** | `fn` items inside `impl Trait for Type` blocks |
 | **Closures** | Closure expressions (above the min node threshold) |
-| **Sub-functions** | `if` branches, `match` arms, loop bodies, closure bodies, and nested blocks |
+| **Sub-functions** | `if` branches and chains, `match` arms, loop bodies, closure bodies, and nested blocks |
 | **Token windows** | Normalized and raw token windows in scanned code/text files |
 | **Line windows** | Normalized line windows in scanned code/text files |
 
@@ -325,7 +363,7 @@ The scanner automatically:
 
 ## Development
 
-**Requirements:** Rust 1.85+ (edition 2024)
+**Requirements:** Rust 1.96+ (edition 2024)
 
 ```sh
 cargo build          # Build

@@ -2,12 +2,11 @@
 //! These tests exercise fingerprint, similarity, grouper, and extractor functionality
 //! using syn-parsed Rust code, so they live in dupes-rust (which depends on syn).
 
-use std::fs;
+use std::path::Path;
 
 use dupes_core::fingerprint::Fingerprint;
 use dupes_core::node::{NodeKind, NormalizedNode};
 use dupes_core::similarity::similarity_score;
-use tempfile::TempDir;
 
 use dupes_rust::normalizer::{
     NormalizationContext, normalize_expr, normalize_item_fn, reindex_placeholders,
@@ -43,10 +42,7 @@ fn expr_similarity(code1: &str, code2: &str) -> f64 {
 }
 
 fn make_units(code: &str) -> Vec<CodeUnit> {
-    let tmp = TempDir::new().unwrap();
-    let file = tmp.path().join("test.rs");
-    fs::write(&file, code).unwrap();
-    parser::parse_file(&file, 1, 0).unwrap()
+    parser::parse_source(Path::new("test.rs"), code, 1, 0).unwrap()
 }
 
 fn parse_and_extract_body(code: &str) -> NormalizedNode {
@@ -56,6 +52,8 @@ fn parse_and_extract_body(code: &str) -> NormalizedNode {
 }
 
 // ── Fingerprint tests (syn-dependent) ─────────────────────────────────────
+
+// jscpd:ignore-start
 
 #[test]
 fn identical_functions_same_fingerprint() {
@@ -82,6 +80,8 @@ fn different_functions_different_fingerprint() {
     let fp2 = Fingerprint::from_sig_and_body(&sig2, &body2);
     assert_ne!(fp1, fp2);
 }
+
+// jscpd:ignore-end
 
 #[test]
 fn fingerprint_from_node() {
@@ -191,7 +191,7 @@ fn simple_expr_different_op() {
 #[test]
 fn near_duplicate_complex_fn() {
     let score = fn_body_similarity(
-        r#"
+        r"
         fn process(data: Vec<i32>) -> i32 {
             let mut sum = 0;
             for item in data.iter() {
@@ -201,8 +201,8 @@ fn near_duplicate_complex_fn() {
             }
             sum
         }
-        "#,
-        r#"
+        ",
+        r"
         fn compute(values: Vec<i32>) -> i32 {
             let mut total = 0;
             for val in values.iter() {
@@ -212,7 +212,7 @@ fn near_duplicate_complex_fn() {
             }
             total
         }
-        "#,
+        ",
     );
     assert!((score - 1.0).abs() < f64::EPSILON);
 }
@@ -272,10 +272,12 @@ fn same_macro_different_arg_count_partial_similarity() {
 
 // ── Grouper tests (syn-dependent) ─────────────────────────────────────────
 
+// jscpd:ignore-start
+
 #[test]
 fn exact_duplicates_grouped() {
     let units = make_units(
-        r#"
+        r"
         fn foo(x: i32) -> i32 {
             let y = x + 1;
             y * 2
@@ -287,7 +289,7 @@ fn exact_duplicates_grouped() {
         fn unique(x: i32) -> i32 {
             x * x * x
         }
-        "#,
+        ",
     );
     let groups = dupes_core::grouper::group_exact_duplicates(&units);
     assert_eq!(groups.len(), 1);
@@ -298,11 +300,11 @@ fn exact_duplicates_grouped() {
 #[test]
 fn no_duplicates_no_groups() {
     let units = make_units(
-        r#"
+        r"
         fn add(x: i32) -> i32 { x + 1 }
         fn mul(x: i32) -> i32 { x * 2 }
         fn sub(x: i32) -> i32 { x - 3 }
-        "#,
+        ",
     );
     let groups = dupes_core::grouper::group_exact_duplicates(&units);
     assert!(groups.is_empty());
@@ -311,12 +313,12 @@ fn no_duplicates_no_groups() {
 #[test]
 fn multiple_exact_groups() {
     let units = make_units(
-        r#"
+        r"
         fn a1(x: i32) -> i32 { x + 1 }
         fn a2(y: i32) -> i32 { y + 1 }
         fn b1(x: i32) -> i32 { x * 2 }
         fn b2(y: i32) -> i32 { y * 2 }
-        "#,
+        ",
     );
     let groups = dupes_core::grouper::group_exact_duplicates(&units);
     assert_eq!(groups.len(), 2);
@@ -325,7 +327,7 @@ fn multiple_exact_groups() {
 #[test]
 fn near_duplicates_found() {
     let units = make_units(
-        r#"
+        r"
         fn process(data: i32) -> i32 {
             let a = data + 1;
             let b = a * 2;
@@ -338,13 +340,10 @@ fn near_duplicates_found() {
             let c = b - 4;
             a + b + c
         }
-        "#,
+        ",
     );
     let exact = dupes_core::grouper::group_exact_duplicates(&units);
-    let exact_fps: Vec<_> = exact
-        .iter()
-        .flat_map(|g| g.members.iter().map(|member| member.fingerprint))
-        .collect();
+    let exact_fps = dupes_core::grouper::member_fingerprints(&exact);
     let near = dupes_core::grouper::find_near_duplicates(&units, 0.7, &exact_fps);
     assert!(exact.len() + near.len() >= 1);
 }
@@ -352,11 +351,11 @@ fn near_duplicates_found() {
 #[test]
 fn stats_computation() {
     let units = make_units(
-        r#"
+        r"
         fn a(x: i32) -> i32 { x + 1 }
         fn b(y: i32) -> i32 { y + 1 }
         fn c(x: i32) -> i32 { x * 2 }
-        "#,
+        ",
     );
     let exact = dupes_core::grouper::group_exact_duplicates(&units);
     let stats = dupes_core::grouper::compute_stats(&units, &exact, &[]);
@@ -376,13 +375,13 @@ fn single_unit_no_groups() {
 #[test]
 fn exact_groups_sorted_by_size() {
     let units = make_units(
-        r#"
+        r"
         fn a1(x: i32) -> i32 { x + 1 }
         fn a2(y: i32) -> i32 { y + 1 }
         fn a3(z: i32) -> i32 { z + 1 }
         fn b1(x: i32) -> i32 { x * 2 }
         fn b2(y: i32) -> i32 { y * 2 }
-        "#,
+        ",
     );
     let groups = dupes_core::grouper::group_exact_duplicates(&units);
     assert_eq!(groups.len(), 2);
@@ -392,27 +391,26 @@ fn exact_groups_sorted_by_size() {
 #[test]
 fn near_duplicates_exclude_exact() {
     let units = make_units(
-        r#"
+        r"
         fn a(x: i32) -> i32 { x + 1 }
         fn b(y: i32) -> i32 { y + 1 }
-        "#,
+        ",
     );
     let exact = dupes_core::grouper::group_exact_duplicates(&units);
-    let exact_fps: Vec<_> = exact
-        .iter()
-        .flat_map(|g| g.members.iter().map(|member| member.fingerprint))
-        .collect();
+    let exact_fps = dupes_core::grouper::member_fingerprints(&exact);
     let near = dupes_core::grouper::find_near_duplicates(&units, 0.7, &exact_fps);
     assert!(near.is_empty());
 }
 
+// jscpd:ignore-end
+
 #[test]
 fn duplicate_group_has_fingerprint() {
     let units = make_units(
-        r#"
+        r"
         fn a(x: i32) -> i32 { x + 1 }
         fn b(y: i32) -> i32 { y + 1 }
-        "#,
+        ",
     );
     let groups = dupes_core::grouper::group_exact_duplicates(&units);
     assert_eq!(groups.len(), 1);
@@ -422,15 +420,17 @@ fn duplicate_group_has_fingerprint() {
 #[test]
 fn stats_with_near_duplicates() {
     let units = make_units(
-        r#"
+        r"
         fn a(x: i32) -> i32 { x + 1 }
         fn b(y: i32) -> i32 { y * 2 }
-        "#,
+        ",
     );
     let composite_fp = Fingerprint::from_fingerprints(&[Fingerprint::from_node(
         &NormalizedNode::leaf(NodeKind::Opaque),
     )]);
     let near_group = dupes_core::grouper::DuplicateGroup {
+        suppressed: None,
+        also_seen: Vec::new(),
         dimension: dupes_core::code_unit::DetectionDimension::Ast,
         match_kind: dupes_core::grouper::MatchKind::Near,
         fingerprint: composite_fp,
@@ -442,10 +442,12 @@ fn stats_with_near_duplicates() {
     assert_eq!(stats.near_duplicate_groups, 1);
 }
 
+// jscpd:ignore-start
+
 #[test]
 fn stats_includes_line_counts() {
     let units = make_units(
-        r#"
+        r"
         fn foo(x: i32) -> i32 {
             let y = x + 1;
             y * 2
@@ -454,7 +456,7 @@ fn stats_includes_line_counts() {
             let b = a + 1;
             b * 2
         }
-        "#,
+        ",
     );
     let exact = dupes_core::grouper::group_exact_duplicates(&units);
     let stats = dupes_core::grouper::compute_stats(&units, &exact, &[]);
@@ -465,7 +467,7 @@ fn stats_includes_line_counts() {
 #[test]
 fn stats_total_lines_computed() {
     let units = make_units(
-        r#"
+        r"
         fn foo(x: i32) -> i32 {
             let y = x + 1;
             y * 2
@@ -474,11 +476,13 @@ fn stats_total_lines_computed() {
             let b = a + 1;
             b * 2
         }
-        "#,
+        ",
     );
     let stats = dupes_core::grouper::compute_stats(&units, &[], &[]);
     assert!(stats.total_lines > 0);
 }
+
+// jscpd:ignore-end
 
 // ── Extractor tests ───────────────────────────────────────────────────────
 
@@ -488,30 +492,30 @@ fn extracts_if_branches() {
         "fn foo(x: i32) -> i32 { if x > 0 { let y = x + 1; y * 2 } else { let z = x - 1; z * 3 } }",
     );
     let subs = dupes_core::extractor::extract_sub_units(&body, 1);
-    let if_branches: Vec<_> = subs
+    let if_branch_count = subs
         .iter()
         .filter(|s| s.kind == CodeUnitKind::IfBranch)
-        .collect();
-    assert_eq!(if_branches.len(), 2);
+        .count();
+    assert_eq!(if_branch_count, 2);
 }
 
 #[test]
 fn extracts_match_arms() {
     let body = parse_and_extract_body(
-        r#"fn foo(x: i32) -> i32 {
+        r"fn foo(x: i32) -> i32 {
             match x {
                 0 => { let a = 1; a + 1 },
                 1 => { let b = 2; b + 2 },
                 _ => { let c = 3; c + 3 },
             }
-        }"#,
+        }",
     );
     let subs = dupes_core::extractor::extract_sub_units(&body, 1);
-    let match_arms: Vec<_> = subs
+    let match_arm_count = subs
         .iter()
         .filter(|s| s.kind == CodeUnitKind::MatchArm)
-        .collect();
-    assert_eq!(match_arms.len(), 3);
+        .count();
+    assert_eq!(match_arm_count, 3);
 }
 
 #[test]
@@ -519,11 +523,11 @@ fn extracts_loop_bodies() {
     let body =
         parse_and_extract_body("fn foo(x: i32) { for i in 0..10 { let y = i + x; let _ = y; } }");
     let subs = dupes_core::extractor::extract_sub_units(&body, 1);
-    let loops: Vec<_> = subs
+    let loop_count = subs
         .iter()
         .filter(|s| s.kind == CodeUnitKind::LoopBody)
-        .collect();
-    assert_eq!(loops.len(), 1);
+        .count();
+    assert_eq!(loop_count, 1);
 }
 
 #[test]
@@ -583,7 +587,7 @@ fn sub_units_are_reindexed() {
 #[test]
 fn nested_structures_extracted_recursively() {
     let body = parse_and_extract_body(
-        r#"fn foo(x: i32) -> i32 {
+        r"fn foo(x: i32) -> i32 {
             if x > 0 {
                 for i in 0..x {
                     let y = i + 1;
@@ -593,20 +597,22 @@ fn nested_structures_extracted_recursively() {
             } else {
                 x
             }
-        }"#,
+        }",
     );
     let subs = dupes_core::extractor::extract_sub_units(&body, 1);
-    let if_branches: Vec<_> = subs
+    let if_branch_count = subs
         .iter()
         .filter(|s| s.kind == CodeUnitKind::IfBranch)
-        .collect();
-    let loops: Vec<_> = subs
+        .count();
+    let loop_count = subs
         .iter()
         .filter(|s| s.kind == CodeUnitKind::LoopBody)
-        .collect();
-    assert_eq!(if_branches.len(), 2);
-    assert_eq!(loops.len(), 1);
+        .count();
+    assert_eq!(if_branch_count, 2);
+    assert_eq!(loop_count, 1);
 }
+
+// jscpd:ignore-start
 
 #[test]
 fn extracts_while_loop_bodies() {
@@ -636,24 +642,28 @@ fn extracts_bare_loop_bodies() {
     assert_eq!(loops[0].description, "loop body");
 }
 
+// jscpd:ignore-end
+
 #[test]
 fn extracts_closure_bodies() {
     let body = parse_and_extract_body(
-        r#"fn foo(data: Vec<i32>) -> Vec<i32> {
+        r"fn foo(data: Vec<i32>) -> Vec<i32> {
             data.iter().map(|x| {
                 let y = x + 1;
                 let z = y * 2;
                 z
             }).collect()
-        }"#,
+        }",
     );
     let subs = dupes_core::extractor::extract_sub_units(&body, 1);
-    let closures: Vec<_> = subs
+    let closure_count = subs
         .iter()
         .filter(|s| s.kind == CodeUnitKind::Block && s.description == "closure body")
-        .collect();
-    assert_eq!(closures.len(), 1);
+        .count();
+    assert_eq!(closure_count, 1);
 }
+
+// jscpd:ignore-start
 
 #[test]
 fn let_else_diverge_blocks_differ() {
@@ -684,3 +694,5 @@ fn let_else_same_diverge_blocks_match() {
         "identical let-else structures with renamed vars should match"
     );
 }
+
+// jscpd:ignore-end

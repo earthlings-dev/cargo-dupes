@@ -2,44 +2,82 @@ mod common;
 
 use common::{code_dupes, code_dupes_fixture_path, fixture_path};
 use predicates::prelude::*;
+use std::path::Path;
 
-#[test]
-fn explicit_language_rust() {
+fn assert_path_command_contains(path: &Path, command_args: &[&str], expected: &str) {
+    let mut args = vec!["--path", path.to_str().unwrap()];
+    args.extend_from_slice(command_args);
+    code_dupes()
+        .args(args)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(expected));
+}
+
+fn assert_stats_success(path: &Path) {
+    assert_path_command_contains(path, &["stats"], "Total code units analyzed");
+}
+
+fn assert_language_stats_success(path: &Path, language: &str) {
+    assert_path_command_contains(
+        path,
+        &["--language", language, "stats"],
+        "Total code units analyzed",
+    );
+}
+
+fn assert_stats_error(path: &Path, expected: &str) {
+    code_dupes()
+        .args(["--path", path.to_str().unwrap(), "stats"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(expected));
+}
+
+fn assert_language_stats_error(path: &Path, language: &str, expected: &str) {
     code_dupes()
         .args([
             "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
+            path.to_str().unwrap(),
             "--language",
-            "rust",
+            language,
             "stats",
         ])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("Total code units analyzed"));
+        .code(2)
+        .stderr(predicate::str::contains(expected));
+}
+
+fn assert_python_dupes_report_contains(expected: &str) {
+    assert_path_command_contains(
+        &code_dupes_fixture_path("python_dupes"),
+        &[
+            "--language",
+            "python",
+            "--min-nodes",
+            "1",
+            "--min-lines",
+            "1",
+        ],
+        expected,
+    );
+}
+
+#[test]
+fn explicit_language_rust() {
+    assert_language_stats_success(&fixture_path("exact_dupes"), "rust");
 }
 
 #[test]
 fn auto_detect_rust_from_rs_files() {
     // Fixture directories contain .rs files, so Rust should be auto-detected
-    code_dupes()
-        .args([
-            "--path",
-            fixture_path("exact_dupes").to_str().unwrap(),
-            "stats",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Total code units analyzed"));
+    assert_stats_success(&fixture_path("exact_dupes"));
 }
 
 #[test]
 fn error_on_empty_directory() {
     let tmp = tempfile::TempDir::new().unwrap();
-    code_dupes()
-        .args(["--path", tmp.path().to_str().unwrap(), "stats"])
-        .assert()
-        .code(2)
-        .stderr(predicate::str::contains("No recognized source files"));
+    assert_stats_error(tmp.path(), "No recognized source files");
 }
 
 #[test]
@@ -47,26 +85,16 @@ fn error_on_directory_with_unknown_files_only() {
     let tmp = tempfile::TempDir::new().unwrap();
     std::fs::write(tmp.path().join("data.csv"), "a,b,c").unwrap();
     std::fs::write(tmp.path().join("blob.dat"), "hello").unwrap();
-    code_dupes()
-        .args(["--path", tmp.path().to_str().unwrap(), "stats"])
-        .assert()
-        .code(2)
-        .stderr(predicate::str::contains("No recognized source files"));
+    assert_stats_error(tmp.path(), "No recognized source files");
 }
 
 #[test]
 fn auto_detects_generic_text_duplicates() {
-    code_dupes()
-        .args([
-            "--path",
-            code_dupes_fixture_path("text_dupes").to_str().unwrap(),
-            "--line-min-lines",
-            "5",
-            "report",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Line Exact Duplicates"));
+    assert_path_command_contains(
+        &code_dupes_fixture_path("text_dupes"),
+        &["--line-min-lines", "5", "report"],
+        "Line Exact Duplicates",
+    );
 }
 
 #[test]
@@ -100,17 +128,7 @@ fn no_cargo_subcommand_arg_needed() {
 #[test]
 fn explicit_language_on_empty_dir_reports_no_source_files() {
     let tmp = tempfile::TempDir::new().unwrap();
-    code_dupes()
-        .args([
-            "--path",
-            tmp.path().to_str().unwrap(),
-            "--language",
-            "rust",
-            "stats",
-        ])
-        .assert()
-        .code(2)
-        .stderr(predicate::str::contains("No source files"));
+    assert_language_stats_error(tmp.path(), "rust", "No source files");
 }
 
 #[test]
@@ -126,11 +144,7 @@ fn auto_detect_ignores_non_rust_files() {
     .unwrap();
     std::fs::write(tmp.path().join("readme.txt"), "some text").unwrap();
     std::fs::write(tmp.path().join("data.csv"), "a,b,c").unwrap();
-    code_dupes()
-        .args(["--path", tmp.path().to_str().unwrap(), "stats"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Total code units analyzed"));
+    assert_stats_success(tmp.path());
 }
 
 #[test]
@@ -143,26 +157,12 @@ fn auto_detect_finds_deeply_nested_rs_files() {
         "pub fn deep() { println!(\"deep\"); }\n",
     )
     .unwrap();
-    code_dupes()
-        .args(["--path", tmp.path().to_str().unwrap(), "stats"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Total code units analyzed"));
+    assert_stats_success(tmp.path());
 }
 
 #[test]
 fn explicit_language_python() {
-    code_dupes()
-        .args([
-            "--path",
-            code_dupes_fixture_path("python_dupes").to_str().unwrap(),
-            "--language",
-            "python",
-            "stats",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Total code units analyzed"));
+    assert_language_stats_success(&code_dupes_fixture_path("python_dupes"), "python");
 }
 
 #[test]
@@ -173,30 +173,15 @@ fn auto_detect_python_from_py_files() {
         "def add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n",
     )
     .unwrap();
-    code_dupes()
-        .args(["--path", tmp.path().to_str().unwrap(), "stats"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Total code units analyzed"));
+    assert_stats_success(tmp.path());
 }
 
 #[test]
 fn python_detects_exact_duplicates() {
-    code_dupes()
-        .args([
-            "--path",
-            code_dupes_fixture_path("python_dupes").to_str().unwrap(),
-            "--language",
-            "python",
-            "--min-nodes",
-            "1",
-            "--min-lines",
-            "1",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Exact Duplicates"));
+    assert_python_dupes_report_contains("Exact Duplicates");
 }
+
+// jscpd:ignore-start
 
 #[test]
 fn ambiguous_language_detection_errors() {
@@ -233,67 +218,23 @@ fn ambiguous_language_resolved_with_explicit_flag() {
         "def hello():\n    print('hello')\n",
     )
     .unwrap();
-    code_dupes()
-        .args([
-            "--path",
-            tmp.path().to_str().unwrap(),
-            "--language",
-            "python",
-            "stats",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Total code units analyzed"));
+    assert_language_stats_success(tmp.path(), "python");
 }
+
+// jscpd:ignore-end
 
 #[test]
 fn python_detects_lambda_duplicates() {
-    code_dupes()
-        .args([
-            "--path",
-            code_dupes_fixture_path("python_dupes").to_str().unwrap(),
-            "--language",
-            "python",
-            "--min-nodes",
-            "1",
-            "--min-lines",
-            "1",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("closure"));
+    assert_python_dupes_report_contains("closure");
 }
 
 #[test]
 fn python_detects_class_duplicates() {
-    code_dupes()
-        .args([
-            "--path",
-            code_dupes_fixture_path("python_dupes").to_str().unwrap(),
-            "--language",
-            "python",
-            "--min-nodes",
-            "1",
-            "--min-lines",
-            "1",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("class"));
+    assert_python_dupes_report_contains("class");
 }
 
 #[test]
 fn python_explicit_language_on_empty_dir() {
     let tmp = tempfile::TempDir::new().unwrap();
-    code_dupes()
-        .args([
-            "--path",
-            tmp.path().to_str().unwrap(),
-            "--language",
-            "python",
-            "stats",
-        ])
-        .assert()
-        .code(2)
-        .stderr(predicate::str::contains("No source files"));
+    assert_language_stats_error(tmp.path(), "python", "No source files");
 }

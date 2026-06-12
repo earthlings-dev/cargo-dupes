@@ -1,15 +1,13 @@
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process;
 
 use clap::{Parser, ValueEnum};
 use walkdir::WalkDir;
 
 use dupes_core::analyzer::LanguageAnalyzer;
-use dupes_core::cli::{self, CliError, CliOverrides, Command, OutputFormat};
+use dupes_core::cli::{self, CliError, Command, CommonCliArgs};
 use dupes_core::code_unit::CodeUnit;
-use dupes_core::code_unit::DetectionDimension;
 use dupes_core::config::AnalysisConfig;
 use dupes_python::PythonAnalyzer;
 use dupes_rust::RustAnalyzer;
@@ -24,65 +22,12 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
 
-    /// Path to analyze (defaults to current directory).
-    #[arg(short, long, global = true)]
-    path: Option<PathBuf>,
-
     /// Language to analyze. Auto-detected from file extensions if omitted.
     #[arg(short, long, global = true)]
     language: Option<Language>,
 
-    /// Minimum AST node count for analysis.
-    #[arg(long, global = true)]
-    min_nodes: Option<usize>,
-
-    /// Minimum source line count for analysis.
-    #[arg(long, global = true)]
-    min_lines: Option<usize>,
-
-    /// Similarity threshold (0.0-1.0).
-    #[arg(long, global = true)]
-    threshold: Option<f64>,
-
-    /// Output format.
-    #[arg(long, global = true, default_value = "text")]
-    format: OutputFormat,
-
-    /// Exclude patterns (can be repeated).
-    #[arg(long, global = true)]
-    exclude: Vec<String>,
-
-    /// Exclude test code (language-specific detection).
-    #[arg(long, global = true)]
-    exclude_tests: bool,
-
-    /// Enable sub-function duplicate detection (if branches, match arms, loop bodies).
-    #[arg(long, short = 's', global = true)]
-    sub_function: bool,
-
-    /// Disable sub-function duplicate detection.
-    #[arg(long, global = true, conflicts_with = "sub_function")]
-    no_sub_function: bool,
-
-    /// Minimum AST node count for sub-function units.
-    #[arg(long, global = true)]
-    min_sub_nodes: Option<usize>,
-
-    /// Disable a detection dimension (can be repeated).
-    #[arg(long, global = true)]
-    disable_dimension: Vec<DetectionDimension>,
-
-    /// Minimum token count for token-window detection.
-    #[arg(long, global = true)]
-    token_min_tokens: Option<usize>,
-
-    /// Similarity threshold for normalized token near-duplicates.
-    #[arg(long, global = true)]
-    token_threshold: Option<f64>,
-
-    /// Minimum line count for line-window detection.
-    #[arg(long, global = true)]
-    line_min_lines: Option<usize>,
+    #[command(flatten)]
+    common: CommonCliArgs,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -95,9 +40,7 @@ enum Language {
 impl Cli {
     /// Resolve the analysis root from CLI input.
     fn root(&self) -> PathBuf {
-        self.path
-            .clone()
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        self.common.root()
     }
 
     /// Resolve the requested command, defaulting to a full report.
@@ -106,27 +49,9 @@ impl Cli {
     }
 
     /// Convert CLI options into shared core overrides.
-    fn overrides(&self) -> CliOverrides {
-        CliOverrides {
-            min_nodes: self.min_nodes,
-            min_lines: self.min_lines,
-            threshold: self.threshold,
-            exclude: self.exclude.clone(),
-            exclude_tests: if self.exclude_tests { Some(true) } else { None },
-            sub_function: if self.no_sub_function {
-                Some(false)
-            } else if self.sub_function {
-                Some(true)
-            } else {
-                None
-            },
-            min_sub_nodes: self.min_sub_nodes,
-            disabled_dimensions: self.disable_dimension.clone(),
-            token_min_tokens: self.token_min_tokens,
-            token_threshold: self.token_threshold,
-            line_min_lines: self.line_min_lines,
-            generic_extensions: GENERIC_EXTENSIONS.iter().map(ToString::to_string).collect(),
-        }
+    fn overrides(&self) -> cli::CliOverrides {
+        self.common
+            .overrides(GENERIC_EXTENSIONS.iter().map(ToString::to_string).collect())
     }
 }
 
@@ -189,9 +114,10 @@ fn resolve_analyzer(language: &Language) -> Box<dyn LanguageAnalyzer> {
 /// Auto-detect language by scanning for files matching known extensions.
 ///
 /// Performs a single directory walk (instead of one per language) and collects
-/// file extensions, then matches against `Language::ALL`. Returns an error if
-/// multiple languages are detected — the user must specify `--language` to
-/// disambiguate.
+/// file extensions, then matches against `Language::AST`. Returns an error if
+/// multiple AST languages are detected — the user must specify `--language` to
+/// disambiguate. Directories with only generic extensions fall back to
+/// `Language::Generic` (token/line detection without an AST analyzer).
 fn auto_detect_language(root: &std::path::Path) -> Result<Language, CliError> {
     // Collect all file extensions found in a single walk.
     let mut found_extensions = HashSet::new();
@@ -252,94 +178,23 @@ fn auto_detect_language(root: &std::path::Path) -> Result<Language, CliError> {
 }
 
 fn main() {
-    let cli = Cli::parse();
-    let root = cli.root();
-    let command = cli.command();
+    let cli_args = Cli::parse();
+    let root = cli_args.root();
+    let command = cli_args.command();
     let stdout = std::io::stdout();
     let mut writer = stdout.lock();
 
-    if let Err(e) = run_command(&cli, &root, &command, &mut writer) {
-        exit_with_error(&e);
+    let result = cli::run_command_with_analysis(&root, &command, &mut writer, || {
+        let language = cli_args
+            .language
+            .clone()
+            .map_or_else(|| auto_detect_language(&root), Ok)?;
+        let analyzer = resolve_analyzer(&language);
+        let overrides = cli_args.overrides();
+        cli::run_analysis(analyzer.as_ref(), &root, cli_args.common.format, &overrides)
+    });
+
+    if let Err(e) = result {
+        cli::exit_with_error(&e);
     }
-}
-
-/// Run the requested command.
-fn run_command(
-    cli: &Cli,
-    root: &Path,
-    command: &Command,
-    writer: &mut impl std::io::Write,
-) -> cli::CliResult {
-    match command {
-        Command::Ignore {
-            fingerprint,
-            reason,
-        } => cli::cmd_ignore(root, fingerprint, reason.clone(), writer),
-        Command::Ignored => cli::cmd_ignored(root, writer),
-        _ => run_analysis_command(cli, root, command, writer),
-    }
-}
-
-/// Run a command that needs duplicate analysis first.
-fn run_analysis_command(
-    cli_args: &Cli,
-    root: &Path,
-    command: &Command,
-    writer: &mut impl std::io::Write,
-) -> cli::CliResult {
-    let language = cli_args
-        .language
-        .clone()
-        .map_or_else(|| auto_detect_language(root), Ok)?;
-    let analyzer = resolve_analyzer(&language);
-    let overrides = cli_args.overrides();
-    let output = cli::run_analysis(analyzer.as_ref(), root, cli_args.format, &overrides)?;
-
-    for warning in &output.result.warnings {
-        eprintln!("Warning: {warning}");
-    }
-
-    dispatch_analysis_command(root, command, &output, writer)
-}
-
-/// Dispatch a command after analysis has completed.
-fn dispatch_analysis_command(
-    root: &Path,
-    command: &Command,
-    output: &cli::AnalysisOutput,
-    writer: &mut impl std::io::Write,
-) -> cli::CliResult {
-    let reporter: &dyn dupes_core::output::Reporter = &*output.reporter;
-
-    match command {
-        Command::Stats => cli::cmd_stats(&output.result, reporter, writer),
-        Command::Report => cli::cmd_report(&output.result, reporter, writer),
-        Command::Check {
-            max_exact,
-            max_near,
-            max_exact_percent,
-            max_near_percent,
-        } => cli::cmd_check(
-            &output.config,
-            &output.result,
-            reporter,
-            writer,
-            &cli::CheckThresholds {
-                max_exact: *max_exact,
-                max_near: *max_near,
-                max_exact_percent: *max_exact_percent,
-                max_near_percent: *max_near_percent,
-            },
-        ),
-        Command::Cleanup { dry_run } => cli::cmd_cleanup(root, &output.result, writer, *dry_run),
-        Command::Ignore { .. } | Command::Ignored => Ok(()),
-    }
-}
-
-/// Exit with the CLI's documented exit code.
-fn exit_with_error(error: &CliError) -> ! {
-    if !matches!(error, CliError::CheckFailed) {
-        eprintln!("Error: {error}");
-    }
-    process::exit(error.exit_code());
 }

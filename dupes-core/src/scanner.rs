@@ -56,12 +56,7 @@ pub fn scan_files(config: &ScanConfig) -> Vec<PathBuf> {
             && path
                 .extension()
                 .and_then(|ext| ext.to_str())
-                .is_some_and(|ext| {
-                    config
-                        .extensions
-                        .iter()
-                        .any(|e| e.eq_ignore_ascii_case(ext))
-                })
+                .is_some_and(|ext| matches_extension(&config.extensions, ext))
             && !is_excluded_with_set(path, exclude_set.as_ref(), &config.exclude_patterns)
         {
             files.push(path.to_path_buf());
@@ -69,6 +64,11 @@ pub fn scan_files(config: &ScanConfig) -> Vec<PathBuf> {
     }
 
     files
+}
+
+/// Check whether a file extension matches any configured extension.
+fn matches_extension(extensions: &[String], ext: &str) -> bool {
+    extensions.iter().any(|e| e.eq_ignore_ascii_case(ext))
 }
 
 /// Check if a path should be excluded based on exclusion patterns.
@@ -143,6 +143,8 @@ mod tests {
         fs::write(dir.join("src/readme.md"), "# README").unwrap();
     }
 
+    // jscpd:ignore-start
+
     #[test]
     fn scan_finds_rust_files() {
         let tmp = TempDir::new().unwrap();
@@ -174,6 +176,8 @@ mod tests {
                 .any(|f| f.to_string_lossy().contains(".hidden"))
         );
     }
+
+    // jscpd:ignore-end
 
     #[test]
     fn scan_respects_exclude_patterns() {

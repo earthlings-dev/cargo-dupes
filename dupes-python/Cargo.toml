@@ -1,22 +1,22 @@
 [package]
 name = "dupes-python"
-version = "0.2.1"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Python language analyzer for dupes-core using tree-sitter"
-readme = "../README.md"
+readme.workspace = true
 keywords = ["duplicates", "code-quality", "python", "ast"]
-categories = ["development-tools"]
+categories.workspace = true
 
 [lints]
 workspace = true
 
 [dependencies]
-dupes-core = { path = "../dupes-core", version = "0.2.1" }
-dupes-treesitter = { path = "../dupes-treesitter", version = "0.2.1" }
+dupes-core = { workspace = true }
+dupes-treesitter = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-python = { workspace = true }
 

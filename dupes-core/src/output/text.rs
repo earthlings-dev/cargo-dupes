@@ -1,8 +1,8 @@
 use std::io;
 
 use crate::AnalysisResult;
-use crate::grouper::{DuplicateGroup, DuplicationStats};
-use crate::output::{Reporter, display_path};
+use crate::grouper::{DuplicateGroup, DuplicationStats, MatchKind};
+use crate::output::{ReportOptions, ReportSection, Reporter, display_path};
 
 fn format_with_commas(n: usize) -> String {
     let s = n.to_string();
@@ -19,13 +19,33 @@ fn format_with_commas(n: usize) -> String {
 pub struct TextReporter {
     /// Base path for displaying relative paths.
     pub base_path: Option<std::path::PathBuf>,
+    /// Presentation options.
+    pub options: ReportOptions,
 }
+
+// jscpd:ignore-start
 
 impl TextReporter {
     #[must_use]
     pub const fn new(base_path: Option<std::path::PathBuf>) -> Self {
-        Self { base_path }
+        Self::with_options(
+            base_path,
+            ReportOptions {
+                show_suppressed: false,
+                verbose: false,
+            },
+        )
     }
+
+    #[must_use]
+    pub const fn with_options(
+        base_path: Option<std::path::PathBuf>,
+        options: ReportOptions,
+    ) -> Self {
+        Self { base_path, options }
+    }
+
+    // jscpd:ignore-end
 
     fn write_groups(
         &self,
@@ -49,22 +69,28 @@ impl TextReporter {
 
         for (i, group) in groups.iter().enumerate() {
             let fp = group.fingerprint.to_hex();
+            let rule = group
+                .suppressed
+                .map(|rule| format!(" [rule: {}]", rule.as_str()))
+                .unwrap_or_default();
             if show_similarity {
                 writeln!(
                     writer,
-                    "Group {} (fingerprint: {}, similarity: {:.0}%, {} members):",
+                    "Group {} (fingerprint: {}, similarity: {:.0}%, {} members):{}",
                     i + 1,
                     fp,
                     group.similarity * 100.0,
-                    group.members.len()
+                    group.members.len(),
+                    rule,
                 )?;
             } else {
                 writeln!(
                     writer,
-                    "Group {} (fingerprint: {}, {} members):",
+                    "Group {} (fingerprint: {}, {} members):{}",
                     i + 1,
                     fp,
-                    group.members.len()
+                    group.members.len(),
+                    rule,
                 )?;
             }
             for member in &group.members {
@@ -77,18 +103,139 @@ impl TextReporter {
                 } else {
                     String::new()
                 };
+                let marker = if group.suppressed.is_none() {
+                    member
+                        .suppressed
+                        .map(|rule| format!(" [suppressed: {}]", rule.as_str()))
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
                 writeln!(
                     writer,
-                    "  - {} ({}){} at {}:{}-{}",
+                    "  - {} ({}){} at {}:{}-{}{}",
                     member.name,
                     member.kind,
                     parent,
                     display_path(self.base_path.as_deref(), &member.file),
                     member.line_start,
                     member.line_end,
+                    marker,
                 )?;
             }
+            if self.options.show_suppressed {
+                for note in &group.also_seen {
+                    writeln!(
+                        writer,
+                        "  also seen as: {} {} {} group(s)",
+                        note.group_count, note.dimension, note.match_kind,
+                    )?;
+                }
+            }
             writeln!(writer)?;
+        }
+        Ok(())
+    }
+
+    /// Write the suppression and registry accounting lines of the stats.
+    fn write_suppression_stats(
+        &self,
+        stats: &DuplicationStats,
+        writer: &mut dyn io::Write,
+    ) -> io::Result<()> {
+        if stats.suppressed_unit_count > 0 || stats.suppressed_group_count > 0 {
+            writeln!(writer)?;
+            writeln!(
+                writer,
+                "Suppressed: {} units, {} groups (--show-suppressed to list)",
+                stats.suppressed_unit_count, stats.suppressed_group_count
+            )?;
+            if self.options.verbose {
+                writeln!(writer, "Suppressed by rule:")?;
+                for (rule, count) in &stats.suppressed_by_rule {
+                    let noun = if rule.starts_with("group.") {
+                        "groups"
+                    } else {
+                        "units"
+                    };
+                    writeln!(writer, "  {rule}: {count} {noun}")?;
+                }
+            }
+        }
+        if stats.ignored_group_count > 0 {
+            writeln!(
+                writer,
+                "Ignored (registry): {} groups",
+                stats.ignored_group_count
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Write the rule-suppressed groups, partitioned per dimension and match
+    /// kind under `Suppressed ...` section titles.
+    fn write_suppressed_sections(
+        &self,
+        groups: &[DuplicateGroup],
+        writer: &mut dyn io::Write,
+    ) -> io::Result<()> {
+        use crate::code_unit::DetectionDimension;
+        let sections = [
+            (
+                DetectionDimension::Ast,
+                MatchKind::Exact,
+                "Suppressed Exact Duplicates",
+            ),
+            (
+                DetectionDimension::Ast,
+                MatchKind::Near,
+                "Suppressed Near Duplicates",
+            ),
+            (
+                DetectionDimension::SubAst,
+                MatchKind::Exact,
+                "Suppressed Sub-function Exact Duplicates",
+            ),
+            (
+                DetectionDimension::SubAst,
+                MatchKind::Near,
+                "Suppressed Sub-function Near Duplicates",
+            ),
+            (
+                DetectionDimension::TokenNormalized,
+                MatchKind::Exact,
+                "Suppressed Normalized Token Exact Duplicates",
+            ),
+            (
+                DetectionDimension::TokenNormalized,
+                MatchKind::Near,
+                "Suppressed Normalized Token Near Duplicates",
+            ),
+            (
+                DetectionDimension::TokenRaw,
+                MatchKind::Exact,
+                "Suppressed Raw Token Exact Duplicates",
+            ),
+            (
+                DetectionDimension::Line,
+                MatchKind::Exact,
+                "Suppressed Line Exact Duplicates",
+            ),
+        ];
+        for (dimension, match_kind, title) in sections {
+            let section: Vec<DuplicateGroup> = groups
+                .iter()
+                .filter(|group| group.dimension == dimension && group.match_kind == match_kind)
+                .cloned()
+                .collect();
+            self.write_groups(
+                &section,
+                writer,
+                title,
+                None,
+                match_kind == MatchKind::Near,
+                dimension == DetectionDimension::SubAst,
+            )?;
         }
         Ok(())
     }
@@ -139,7 +286,11 @@ impl Reporter for TextReporter {
             None,
             false,
             false,
-        )
+        )?;
+        if self.options.show_suppressed {
+            self.write_suppressed_sections(&result.suppressed_groups, writer)?;
+        }
+        Ok(())
     }
 
     fn report_stats(&self, stats: &DuplicationStats, writer: &mut dyn io::Write) -> io::Result<()> {
@@ -179,32 +330,26 @@ impl Reporter for TextReporter {
             stats.near_duplicate_percent(),
             format_with_commas(stats.total_lines),
         )?;
-        if stats.sub_exact_groups > 0 || stats.sub_near_groups > 0 {
-            writeln!(writer)?;
-            writeln!(
-                writer,
-                "Sub-function exact: {} groups ({} units)",
-                stats.sub_exact_groups, stats.sub_exact_units
-            )?;
-            writeln!(
-                writer,
-                "Sub-function near:  {} groups ({} units)",
-                stats.sub_near_groups, stats.sub_near_units
-            )?;
-        }
-        if stats.token_normalized_exact_groups > 0 || stats.token_normalized_near_groups > 0 {
-            writeln!(writer)?;
-            writeln!(
-                writer,
-                "Normalized token exact: {} groups ({} units)",
-                stats.token_normalized_exact_groups, stats.token_normalized_exact_units
-            )?;
-            writeln!(
-                writer,
-                "Normalized token near:  {} groups ({} units)",
-                stats.token_normalized_near_groups, stats.token_normalized_near_units
-            )?;
-        }
+        write_dimension_pair(
+            writer,
+            "Sub-function exact: ",
+            "Sub-function near:  ",
+            (stats.sub_exact_groups, stats.sub_exact_units),
+            (stats.sub_near_groups, stats.sub_near_units),
+        )?;
+        write_dimension_pair(
+            writer,
+            "Normalized token exact: ",
+            "Normalized token near:  ",
+            (
+                stats.token_normalized_exact_groups,
+                stats.token_normalized_exact_units,
+            ),
+            (
+                stats.token_normalized_near_groups,
+                stats.token_normalized_near_units,
+            ),
+        )?;
         if stats.token_raw_exact_groups > 0 {
             writeln!(
                 writer,
@@ -219,115 +364,72 @@ impl Reporter for TextReporter {
                 stats.line_exact_groups, stats.line_exact_units
             )?;
         }
-        Ok(())
+        self.write_suppression_stats(stats, writer)
     }
 
-    fn report_exact(
+    fn report_groups(
         &self,
         groups: &[DuplicateGroup],
         writer: &mut dyn io::Write,
+        section: ReportSection,
     ) -> io::Result<()> {
         self.write_groups(
             groups,
             writer,
-            "Exact Duplicates",
-            Some("No exact duplicates found."),
-            false,
-            false,
-        )
-    }
-
-    fn report_near(&self, groups: &[DuplicateGroup], writer: &mut dyn io::Write) -> io::Result<()> {
-        self.write_groups(
-            groups,
-            writer,
-            "Near Duplicates",
-            Some("No near duplicates found."),
-            true,
-            false,
-        )
-    }
-
-    fn report_sub_exact(
-        &self,
-        groups: &[DuplicateGroup],
-        writer: &mut dyn io::Write,
-    ) -> io::Result<()> {
-        self.write_groups(
-            groups,
-            writer,
-            "Sub-function Exact Duplicates",
-            None,
-            false,
-            true,
-        )
-    }
-
-    fn report_sub_near(
-        &self,
-        groups: &[DuplicateGroup],
-        writer: &mut dyn io::Write,
-    ) -> io::Result<()> {
-        self.write_groups(
-            groups,
-            writer,
-            "Sub-function Near Duplicates",
-            None,
-            true,
-            true,
+            section.title(),
+            section.empty_message(),
+            section.show_similarity(),
+            section.show_parent(),
         )
     }
 }
 
+/// Write one paired exact/near dimension stats block when either side has
+/// groups; the labels carry their own alignment padding.
+fn write_dimension_pair(
+    writer: &mut dyn io::Write,
+    exact_label: &str,
+    near_label: &str,
+    exact: (usize, usize),
+    near: (usize, usize),
+) -> io::Result<()> {
+    if exact.0 == 0 && near.0 == 0 {
+        return Ok(());
+    }
+    writeln!(writer)?;
+    writeln!(
+        writer,
+        "{exact_label}{} groups ({} units)",
+        exact.0, exact.1
+    )?;
+    writeln!(writer, "{near_label}{} groups ({} units)", near.0, near.1)?;
+    Ok(())
+}
+
+// jscpd:ignore-start
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::code_unit::{CodeUnit, CodeUnitKind, DetectionDimension};
-    use crate::fingerprint::Fingerprint;
-    use crate::grouper::MatchKind;
-    use crate::node::{NodeKind, NormalizedNode};
+    use crate::output::test_support::{
+        analysis_result, block_fingerprint, exact_group, make_unit, near_group, stats,
+        with_duplicate_lines,
+    };
     use std::path::PathBuf;
-
-    fn make_unit(name: &str, file: &str, line_start: usize, line_end: usize) -> CodeUnit {
-        CodeUnit {
-            kind: CodeUnitKind::Function,
-            name: name.to_string(),
-            file: PathBuf::from(file),
-            line_start,
-            line_end,
-            signature: NormalizedNode::leaf(NodeKind::Opaque),
-            body: NormalizedNode::with_children(NodeKind::Block, vec![]),
-            fingerprint: Fingerprint::from_node(&NormalizedNode::leaf(NodeKind::Opaque)),
-            node_count: 10,
-            parent_name: None,
-            is_test: false,
-        }
-    }
 
     #[test]
     fn text_report_stats() {
         let reporter = TextReporter::new(None);
-        let stats = DuplicationStats {
-            total_code_units: 100,
-            total_lines: 1000,
-            exact_duplicate_groups: 5,
-            exact_duplicate_units: 12,
-            near_duplicate_groups: 3,
-            near_duplicate_units: 8,
-            exact_duplicate_lines: 60,
-            near_duplicate_lines: 40,
-            sub_exact_groups: 0,
-            sub_exact_units: 0,
-            sub_near_groups: 0,
-            sub_near_units: 0,
-            ..Default::default()
-        };
+        let stats = with_duplicate_lines(stats(100, 1000, 5, 12, 3, 8), 61, 43);
         let mut buf = Vec::new();
         reporter.report_stats(&stats, &mut buf).unwrap();
         let output = String::from_utf8(buf).unwrap();
         assert!(output.contains("100"));
         assert!(output.contains("5 groups"));
         assert!(output.contains("3 groups"));
+        assert!(output.contains("Duplicated lines (exact): 61"));
+        assert!(output.contains("Duplicated lines (near):  43"));
+        assert!(output.contains("Duplication: 6.1% exact, 4.3% near"));
     }
 
     #[test]
@@ -342,16 +444,10 @@ mod tests {
     #[test]
     fn text_report_exact_with_groups() {
         let reporter = TextReporter::new(Some(PathBuf::from("/project")));
-        let group = DuplicateGroup {
-            dimension: DetectionDimension::Ast,
-            match_kind: MatchKind::Exact,
-            fingerprint: Fingerprint::from_node(&NormalizedNode::leaf(NodeKind::Opaque)),
-            members: vec![
-                make_unit("foo", "/project/src/a.rs", 10, 20),
-                make_unit("bar", "/project/src/b.rs", 30, 40),
-            ],
-            similarity: 1.0,
-        };
+        let group = exact_group(vec![
+            make_unit("foo", "/project/src/a.rs", 10, 20),
+            make_unit("bar", "/project/src/b.rs", 30, 40),
+        ]);
         let mut buf = Vec::new();
         reporter.report_exact(&[group], &mut buf).unwrap();
         let output = String::from_utf8(buf).unwrap();
@@ -365,17 +461,15 @@ mod tests {
     #[test]
     fn text_report_near_with_groups() {
         let reporter = TextReporter::new(None);
-        let fp = Fingerprint::from_node(&NormalizedNode::with_children(NodeKind::Block, vec![]));
-        let group = DuplicateGroup {
-            dimension: DetectionDimension::Ast,
-            match_kind: MatchKind::Near,
-            fingerprint: fp,
-            members: vec![
+        let fp = block_fingerprint();
+        let group = near_group(
+            fp,
+            0.85,
+            vec![
                 make_unit("process", "/src/a.rs", 10, 25),
                 make_unit("compute", "/src/b.rs", 30, 45),
             ],
-            similarity: 0.85,
-        };
+        );
         let mut buf = Vec::new();
         reporter.report_near(&[group], &mut buf).unwrap();
         let output = String::from_utf8(buf).unwrap();
@@ -396,6 +490,34 @@ mod tests {
     }
 
     #[test]
+    fn text_report_full_includes_stats_and_group_sections() {
+        let reporter = TextReporter::new(None);
+        let result = analysis_result(
+            with_duplicate_lines(stats(4, 200, 1, 2, 1, 2), 20, 15),
+            vec![exact_group(vec![
+                make_unit("foo", "/src/a.rs", 1, 10),
+                make_unit("bar", "/src/b.rs", 20, 30),
+            ])],
+            vec![near_group(
+                block_fingerprint(),
+                0.8,
+                vec![
+                    make_unit("process", "/src/c.rs", 40, 50),
+                    make_unit("compute", "/src/d.rs", 60, 70),
+                ],
+            )],
+            Vec::new(),
+        );
+        let mut buf = Vec::new();
+        reporter.report_full(&result, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("Duplication Statistics"));
+        assert!(output.contains("Exact Duplicates"));
+        assert!(output.contains("Near Duplicates"));
+        assert!(output.contains("process"));
+    }
+
+    #[test]
     fn relative_path_stripping() {
         let base = PathBuf::from("/home/user/project");
         let result = display_path(
@@ -405,3 +527,5 @@ mod tests {
         assert_eq!(result, "src/main.rs");
     }
 }
+
+// jscpd:ignore-end

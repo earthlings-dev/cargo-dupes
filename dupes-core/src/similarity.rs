@@ -3,7 +3,7 @@ use crate::node::{NodeKind, NormalizedNode};
 /// Compute a similarity score between two normalized trees using the Dice coefficient.
 /// Returns a value between 0.0 (completely different) and 1.0 (identical).
 ///
-/// score = (2 * matching_nodes) / (nodes_a + nodes_b)
+/// score = (2 * `matching_nodes`) / (`nodes_a` + `nodes_b`)
 ///
 /// Children are compared positionally via `zip`, so when two same-kind nodes have
 /// different child counts, only the shared prefix is compared; extra children in the
@@ -158,6 +158,8 @@ mod tests {
         assert!((score - 2.0 / 3.0).abs() < f64::EPSILON);
     }
 
+    // jscpd:ignore-start
+
     #[test]
     fn macro_call_different_names_score_zero() {
         let a = NormalizedNode::with_children(
@@ -194,6 +196,8 @@ mod tests {
         // matching: MacroCall(1) + Int(1) = 2; score = 4/5 = 0.8
         assert!((score - 0.8).abs() < f64::EPSILON);
     }
+
+    // jscpd:ignore-end
 
     #[test]
     fn similarity_is_symmetric() {

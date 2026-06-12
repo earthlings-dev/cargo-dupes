@@ -61,6 +61,38 @@ pub struct NodeMapping {
     pub node_kinds: HashMap<&'static str, NodeKind>,
 }
 
+macro_rules! set_builder {
+    ($(
+        $(#[$meta:meta])*
+        $method:ident => $field:ident;
+    )*) => {
+        $(
+            $(#[$meta])*
+            #[must_use]
+            pub fn $method(mut self, kinds: &[&'static str]) -> Self {
+                extend_set(&mut self.$field, kinds);
+                self
+            }
+        )*
+    };
+}
+
+macro_rules! map_builder {
+    ($(
+        $(#[$meta:meta])*
+        $method:ident($value:ty) => $field:ident;
+    )*) => {
+        $(
+            $(#[$meta])*
+            #[must_use]
+            pub fn $method(mut self, mappings: &[(&'static str, $value)]) -> Self {
+                extend_map(&mut self.$field, mappings);
+                self
+            }
+        )*
+    };
+}
+
 impl NodeMapping {
     /// Create an empty mapping. Use the builder methods to populate it.
     #[must_use]
@@ -89,160 +121,66 @@ impl NodeMapping {
         }
     }
 
-    /// Add identifier node kinds.
-    #[must_use]
-    pub fn identifiers(mut self, kinds: &[&'static str]) -> Self {
-        self.identifier_kinds.extend(kinds);
-        self
+    set_builder! {
+        /// Add identifier node kinds.
+        identifiers => identifier_kinds;
+        /// Add node kinds to skip entirely.
+        skip => skip_kinds;
+        /// Add node kinds to treat as opaque leaves.
+        opaque => opaque_kinds;
+        /// Add block/suite node kinds.
+        blocks => block_kinds;
+        /// Add call node kinds.
+        calls => call_kinds;
+        /// Add return statement node kinds.
+        returns => return_kinds;
+        /// Add if/conditional node kinds.
+        ifs => if_kinds;
+        /// Add infinite loop node kinds.
+        loops => loop_kinds;
+        /// Add for-loop node kinds.
+        for_loops => for_kinds;
+        /// Add while-loop node kinds.
+        while_loops => while_kinds;
+        /// Add match/switch node kinds.
+        matches => match_kinds;
+        /// Add assignment node kinds.
+        assignments => assignment_kinds;
+        /// Add function definition node kinds.
+        function_defs => function_def_kinds;
+        /// Add binary operator expression node kinds (e.g., `"binary_operator"`,
+        /// `"binary_expression"`). These are the tree-sitter node kinds that contain
+        /// a binary operation; the operator text is looked up in `binary_op_map`.
+        binary_op_kinds => binary_op_kinds;
+        /// Add unary operator expression node kinds (e.g., `"unary_operator"`,
+        /// `"not_operator"`). These are the tree-sitter node kinds that contain
+        /// a unary operation; the operator text is looked up in `unary_op_map`.
+        unary_op_kinds => unary_op_kinds;
+        /// Add match/case arm node kinds for fixed-position extraction.
+        match_arms => match_arm_kinds;
     }
 
-    /// Add literal node kinds with their `LiteralKind`.
-    #[must_use]
-    pub fn literals(mut self, mappings: &[(&'static str, LiteralKind)]) -> Self {
-        for (kind, lit) in mappings {
-            self.literal_kinds.insert(kind, lit.clone());
-        }
-        self
+    map_builder! {
+        /// Add literal node kinds with their `LiteralKind`.
+        literals(LiteralKind) => literal_kinds;
+        /// Add binary operator mappings (operator text → `BinOpKind`).
+        binary_ops(BinOpKind) => binary_op_map;
+        /// Add unary operator mappings (operator text → `UnOpKind`).
+        unary_ops(UnOpKind) => unary_op_map;
+        /// Add direct node-kind-to-`NodeKind` mappings.
+        ///
+        /// Named children are recursively normalized. Zero-child nodes produce leaves.
+        /// Use this for constructs like `break_statement` → `Break`, `await` → `Await`.
+        node_kinds(NodeKind) => node_kinds;
     }
+}
 
-    /// Add binary operator mappings (operator text → `BinOpKind`).
-    #[must_use]
-    pub fn binary_ops(mut self, mappings: &[(&'static str, BinOpKind)]) -> Self {
-        for (text, op) in mappings {
-            self.binary_op_map.insert(text, op.clone());
-        }
-        self
-    }
+fn extend_set(set: &mut HashSet<&'static str>, values: &[&'static str]) {
+    set.extend(values.iter().copied());
+}
 
-    /// Add unary operator mappings (operator text → `UnOpKind`).
-    #[must_use]
-    pub fn unary_ops(mut self, mappings: &[(&'static str, UnOpKind)]) -> Self {
-        for (text, op) in mappings {
-            self.unary_op_map.insert(text, op.clone());
-        }
-        self
-    }
-
-    /// Add node kinds to skip entirely.
-    #[must_use]
-    pub fn skip(mut self, kinds: &[&'static str]) -> Self {
-        self.skip_kinds.extend(kinds);
-        self
-    }
-
-    /// Add node kinds to treat as opaque leaves.
-    #[must_use]
-    pub fn opaque(mut self, kinds: &[&'static str]) -> Self {
-        self.opaque_kinds.extend(kinds);
-        self
-    }
-
-    /// Add block/suite node kinds.
-    #[must_use]
-    pub fn blocks(mut self, kinds: &[&'static str]) -> Self {
-        self.block_kinds.extend(kinds);
-        self
-    }
-
-    /// Add call node kinds.
-    #[must_use]
-    pub fn calls(mut self, kinds: &[&'static str]) -> Self {
-        self.call_kinds.extend(kinds);
-        self
-    }
-
-    /// Add return statement node kinds.
-    #[must_use]
-    pub fn returns(mut self, kinds: &[&'static str]) -> Self {
-        self.return_kinds.extend(kinds);
-        self
-    }
-
-    /// Add if/conditional node kinds.
-    #[must_use]
-    pub fn ifs(mut self, kinds: &[&'static str]) -> Self {
-        self.if_kinds.extend(kinds);
-        self
-    }
-
-    /// Add infinite loop node kinds.
-    #[must_use]
-    pub fn loops(mut self, kinds: &[&'static str]) -> Self {
-        self.loop_kinds.extend(kinds);
-        self
-    }
-
-    /// Add for-loop node kinds.
-    #[must_use]
-    pub fn for_loops(mut self, kinds: &[&'static str]) -> Self {
-        self.for_kinds.extend(kinds);
-        self
-    }
-
-    /// Add while-loop node kinds.
-    #[must_use]
-    pub fn while_loops(mut self, kinds: &[&'static str]) -> Self {
-        self.while_kinds.extend(kinds);
-        self
-    }
-
-    /// Add match/switch node kinds.
-    #[must_use]
-    pub fn matches(mut self, kinds: &[&'static str]) -> Self {
-        self.match_kinds.extend(kinds);
-        self
-    }
-
-    /// Add assignment node kinds.
-    #[must_use]
-    pub fn assignments(mut self, kinds: &[&'static str]) -> Self {
-        self.assignment_kinds.extend(kinds);
-        self
-    }
-
-    /// Add function definition node kinds.
-    #[must_use]
-    pub fn function_defs(mut self, kinds: &[&'static str]) -> Self {
-        self.function_def_kinds.extend(kinds);
-        self
-    }
-
-    /// Add binary operator expression node kinds (e.g., `"binary_operator"`,
-    /// `"binary_expression"`). These are the tree-sitter node kinds that contain
-    /// a binary operation; the operator text is looked up in `binary_op_map`.
-    #[must_use]
-    pub fn binary_op_kinds(mut self, kinds: &[&'static str]) -> Self {
-        self.binary_op_kinds.extend(kinds);
-        self
-    }
-
-    /// Add unary operator expression node kinds (e.g., `"unary_operator"`,
-    /// `"not_operator"`). These are the tree-sitter node kinds that contain
-    /// a unary operation; the operator text is looked up in `unary_op_map`.
-    #[must_use]
-    pub fn unary_op_kinds(mut self, kinds: &[&'static str]) -> Self {
-        self.unary_op_kinds.extend(kinds);
-        self
-    }
-
-    /// Add match/case arm node kinds for fixed-position extraction.
-    #[must_use]
-    pub fn match_arms(mut self, kinds: &[&'static str]) -> Self {
-        self.match_arm_kinds.extend(kinds);
-        self
-    }
-
-    /// Add direct node-kind-to-`NodeKind` mappings.
-    ///
-    /// Named children are recursively normalized. Zero-child nodes produce leaves.
-    /// Use this for constructs like `break_statement` → `Break`, `await` → `Await`.
-    #[must_use]
-    pub fn node_kinds(mut self, mappings: &[(&'static str, NodeKind)]) -> Self {
-        for (kind, node_kind) in mappings {
-            self.node_kinds.insert(kind, node_kind.clone());
-        }
-        self
-    }
+fn extend_map<T: Clone>(map: &mut HashMap<&'static str, T>, values: &[(&'static str, T)]) {
+    map.extend(values.iter().map(|(key, value)| (*key, value.clone())));
 }
 
 impl Default for NodeMapping {
@@ -262,6 +200,8 @@ mod tests {
         assert!(m.literal_kinds.is_empty());
         assert!(m.binary_op_map.is_empty());
     }
+
+    // jscpd:ignore-start
 
     #[test]
     fn builder_api() {
@@ -293,4 +233,6 @@ mod tests {
         assert!(m.assignment_kinds.contains("assignment"));
         assert!(m.function_def_kinds.contains("function_definition"));
     }
+
+    // jscpd:ignore-end
 }

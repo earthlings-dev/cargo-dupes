@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn hex_roundtrip() {
-        let fp = Fingerprint(0xdeadbeef12345678);
+        let fp = Fingerprint(0xdead_beef_1234_5678);
         let hex = fp.to_hex();
         assert_eq!(hex, "deadbeef12345678");
         let fp2 = Fingerprint::from_hex(&hex).unwrap();
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn display_format() {
-        let fp = Fingerprint(0x0000000000000042);
+        let fp = Fingerprint(0x0000_0000_0000_0042);
         assert_eq!(format!("{fp}"), "0000000000000042");
     }
 

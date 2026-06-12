@@ -1,23 +1,23 @@
 [package]
 name = "dupes-rust"
-version = "0.2.1"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 description = "Rust language analyzer for dupes-core duplicate detection"
-readme = "../README.md"
+readme.workspace = true
 keywords = ["duplicates", "code-quality", "lint", "ast", "rust"]
-categories = ["development-tools"]
+categories.workspace = true
 
 [lints]
 workspace = true
 
 [dependencies]
-dupes-core = { path = "../dupes-core", version = "0.2.1" }
-syn = { version = "2", features = ["full", "visit", "extra-traits"] }
-proc-macro2 = { version = "1", features = ["span-locations"] }
+dupes-core = { workspace = true }
+syn = { workspace = true }
+proc-macro2 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

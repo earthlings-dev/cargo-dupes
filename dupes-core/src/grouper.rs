@@ -5,7 +5,7 @@ use crate::fingerprint::Fingerprint;
 use crate::similarity;
 
 /// Whether a group was found by exact equality or similarity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MatchKind {
     /// Every compared signature is exactly equal.
@@ -30,13 +30,28 @@ pub struct DuplicateGroup {
     pub dimension: DetectionDimension,
     /// Exact or near-duplicate match.
     pub match_kind: MatchKind,
-    /// Shared fingerprint for exact duplicates, or composite fingerprint
-    /// (derived from sorted member fingerprints) for near-duplicate groups.
+    /// Stable group fingerprint derived from the dimension, the match kind,
+    /// and a content fingerprint: the shared member fingerprint for exact
+    /// groups, a composite of sorted member fingerprints for near groups.
     pub fingerprint: Fingerprint,
     /// The code units in this group.
     pub members: Vec<CodeUnit>,
     /// Similarity score (1.0 for exact duplicates).
     pub similarity: f64,
+    /// Suppression rule that hid this group from the default report.
+    pub suppressed: Option<crate::suppression::RuleId>,
+    /// Redundant shadows of this group in other dimensions, aggregated per
+    /// (dimension, match kind).
+    pub also_seen: Vec<CoverageNote>,
+}
+
+/// A note that a group's duplication also surfaced as redundant groups in
+/// another dimension before cross-dimension dedup suppressed them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoverageNote {
+    pub dimension: DetectionDimension,
+    pub match_kind: MatchKind,
+    pub group_count: usize,
 }
 
 /// Statistics about duplication in the analyzed codebase.
@@ -64,6 +79,11 @@ pub struct DuplicationStats {
     pub token_raw_exact_units: usize,
     pub line_exact_groups: usize,
     pub line_exact_units: usize,
+    // Suppression and ignore accounting
+    pub suppressed_unit_count: usize,
+    pub suppressed_group_count: usize,
+    pub suppressed_by_rule: std::collections::BTreeMap<String, usize>,
+    pub ignored_group_count: usize,
 }
 
 impl DuplicationStats {
@@ -113,27 +133,40 @@ pub fn group_exact_duplicates_for(
         .into_iter()
         .filter(|(_, members)| members.len() > 1)
         .map(|(fp, members)| DuplicateGroup {
+            suppressed: None,
+            also_seen: Vec::new(),
             dimension,
             match_kind: MatchKind::Exact,
-            fingerprint: group_fingerprint(dimension, MatchKind::Exact, fp, &members),
+            fingerprint: group_fingerprint(dimension, MatchKind::Exact, fp),
             members,
             similarity: 1.0,
         })
         .collect();
 
     // Sort by group size (largest first), then by fingerprint for stability
-    result.sort_by(|a, b| {
-        b.members
-            .len()
-            .cmp(&a.members.len())
-            .then_with(|| a.fingerprint.cmp(&b.fingerprint))
-    });
+    result.sort_by(compare_group_size_desc_then_fingerprint);
 
     result
 }
 
+/// Order groups by member count (largest first), then fingerprint for stability.
+pub(crate) fn compare_group_size_desc_then_fingerprint(
+    a: &DuplicateGroup,
+    b: &DuplicateGroup,
+) -> std::cmp::Ordering {
+    b.members
+        .len()
+        .cmp(&a.members.len())
+        .then_with(|| a.fingerprint.cmp(&b.fingerprint))
+}
+
+/// Order similarity scores descending, treating incomparable values as equal.
+pub(crate) fn compare_similarity_desc(a: f64, b: f64) -> std::cmp::Ordering {
+    b.partial_cmp(&a).unwrap_or(std::cmp::Ordering::Equal)
+}
+
 /// Find near-duplicate groups above the similarity threshold.
-/// Pre-filters by CodeUnitKind and approximate size to reduce pairwise comparisons.
+/// Pre-filters by `CodeUnitKind` and approximate size to reduce pairwise comparisons.
 #[must_use]
 pub fn find_near_duplicates(
     units: &[CodeUnit],
@@ -252,9 +285,11 @@ pub fn find_near_duplicates_for(
             let composite_fp = Fingerprint::from_fingerprints(&member_fps);
 
             DuplicateGroup {
+                suppressed: None,
+                also_seen: Vec::new(),
                 dimension,
                 match_kind: MatchKind::Near,
-                fingerprint: group_fingerprint(dimension, MatchKind::Near, composite_fp, &members),
+                fingerprint: group_fingerprint(dimension, MatchKind::Near, composite_fp),
                 members,
                 similarity: if min_score.is_infinite() {
                     threshold
@@ -269,48 +304,54 @@ pub fn find_near_duplicates_for(
         b.members
             .len()
             .cmp(&a.members.len())
-            .then_with(|| {
-                b.similarity
-                    .partial_cmp(&a.similarity)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            .then(compare_similarity_desc(a.similarity, b.similarity))
             .then_with(|| a.fingerprint.cmp(&b.fingerprint))
     });
 
     result
 }
 
-/// Build a stable group fingerprint tied to dimension, match kind, and locations.
+/// Build a stable group fingerprint tied to dimension, match kind, and content.
 fn group_fingerprint(
     dimension: DetectionDimension,
     match_kind: MatchKind,
     content_fingerprint: Fingerprint,
-    members: &[CodeUnit],
 ) -> Fingerprint {
-    let mut locations: Vec<String> = members
-        .iter()
-        .map(|member| {
-            format!(
-                "{}:{}-{}",
-                member.file.display(),
-                member.line_start,
-                member.line_end
-            )
-        })
-        .collect();
-    locations.sort();
-    Fingerprint::from_bytes(
-        format!("{dimension}:{match_kind}:{content_fingerprint}:{locations:?}").as_bytes(),
-    )
+    Fingerprint::from_bytes(format!("{dimension}:{match_kind}:{content_fingerprint}").as_bytes())
+}
+
+/// Build the stable group fingerprint for an exact group in a dimension.
+///
+/// Used when the analysis pipeline rebuilds a group from merged window
+/// content so the result is identical to a directly grouped window.
+pub(crate) fn exact_group_fingerprint(
+    dimension: DetectionDimension,
+    content_fingerprint: Fingerprint,
+) -> Fingerprint {
+    group_fingerprint(dimension, MatchKind::Exact, content_fingerprint)
+}
+
+/// Return the member fingerprints of every group, in group order.
+#[must_use]
+pub fn member_fingerprints(groups: &[DuplicateGroup]) -> Vec<Fingerprint> {
+    member_fingerprints_iter(groups.iter()).collect()
+}
+
+/// Project the member fingerprints of `groups`, in group order.
+pub(crate) fn member_fingerprints_iter<'a>(
+    groups: impl Iterator<Item = &'a DuplicateGroup> + 'a,
+) -> impl Iterator<Item = Fingerprint> + 'a {
+    groups.flat_map(|group| group.members.iter().map(|member| member.fingerprint))
 }
 
 /// Compute the total number of source lines in a duplicate group.
 fn group_line_count(group: &DuplicateGroup) -> usize {
-    group
-        .members
-        .iter()
-        .map(|m| m.line_end.saturating_sub(m.line_start) + 1)
-        .sum()
+    group.members.iter().map(unit_line_count).sum()
+}
+
+/// Compute the number of source lines covered by a code unit.
+pub(crate) const fn unit_line_count(unit: &CodeUnit) -> usize {
+    unit.line_end.saturating_sub(unit.line_start) + 1
 }
 
 /// Compute duplication statistics.
@@ -319,12 +360,13 @@ pub fn compute_stats(
     exact_groups: &[DuplicateGroup],
     near_groups: &[DuplicateGroup],
 ) -> DuplicationStats {
-    let total_lines: usize = units
-        .iter()
-        .map(|u| u.line_end.saturating_sub(u.line_start) + 1)
-        .sum();
+    let total_lines: usize = units.iter().map(unit_line_count).sum();
 
     DuplicationStats {
+        suppressed_unit_count: 0,
+        suppressed_group_count: 0,
+        suppressed_by_rule: std::collections::BTreeMap::new(),
+        ignored_group_count: 0,
         total_code_units: units.len(),
         total_lines,
         exact_duplicate_groups: exact_groups.len(),
@@ -411,12 +453,84 @@ fn union(parent: &mut [usize], i: usize, j: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node::{NodeKind, NormalizedNode};
+    use std::path::PathBuf;
+
+    fn test_unit(name: &str, file: &str, line_start: usize, body: NormalizedNode) -> CodeUnit {
+        let fingerprint = Fingerprint::from_node(&body);
+        CodeUnit {
+            suppressed: None,
+            parent_chain: None,
+            kind: CodeUnitKind::Function,
+            name: name.to_string(),
+            file: PathBuf::from(file),
+            line_start,
+            line_end: line_start + 2,
+            signature: NormalizedNode::leaf(NodeKind::Opaque),
+            node_count: crate::node::count_nodes(&body),
+            body,
+            fingerprint,
+            parent_name: None,
+            is_test: false,
+        }
+    }
+
+    fn token_body(value: &str) -> NormalizedNode {
+        NormalizedNode::with_children(
+            NodeKind::Block,
+            vec![NormalizedNode::leaf(NodeKind::Token(value.to_string()))],
+        )
+    }
 
     #[test]
     fn empty_input_no_groups() {
         let groups = group_exact_duplicates(&[]);
         assert!(groups.is_empty());
     }
+
+    // jscpd:ignore-start
+
+    #[test]
+    fn exact_group_fingerprint_ignores_locations() {
+        let first = vec![
+            test_unit("a", "src/a.rs", 1, token_body("same")),
+            test_unit("b", "src/b.rs", 10, token_body("same")),
+        ];
+        let second = vec![
+            test_unit("a", "renamed/a.rs", 100, token_body("same")),
+            test_unit("b", "renamed/b.rs", 200, token_body("same")),
+        ];
+
+        let first_group = group_exact_duplicates_for(&first, DetectionDimension::Ast);
+        let second_group = group_exact_duplicates_for(&second, DetectionDimension::Ast);
+
+        assert_eq!(first_group.len(), 1);
+        assert_eq!(second_group.len(), 1);
+        assert_eq!(first_group[0].fingerprint, second_group[0].fingerprint);
+    }
+
+    #[test]
+    fn near_group_fingerprint_ignores_locations() {
+        let first = vec![
+            test_unit("a", "src/a.rs", 1, token_body("left")),
+            test_unit("b", "src/b.rs", 10, token_body("right")),
+            test_unit("c", "src/c.rs", 20, token_body("middle")),
+        ];
+        let second = vec![
+            test_unit("a", "renamed/a.rs", 100, token_body("left")),
+            test_unit("b", "renamed/b.rs", 200, token_body("right")),
+            test_unit("c", "renamed/c.rs", 300, token_body("middle")),
+        ];
+
+        let first_group = find_near_duplicates_for(&first, 0.0, &[], DetectionDimension::Ast);
+        let second_group = find_near_duplicates_for(&second, 0.0, &[], DetectionDimension::Ast);
+
+        assert_eq!(first_group.len(), 1);
+        assert_eq!(second_group.len(), 1);
+        assert_eq!(first_group[0].fingerprint, second_group[0].fingerprint);
+    }
+
+    // jscpd:ignore-end
 
     #[test]
     fn percentage_helpers() {

@@ -1,0 +1,32 @@
+{
+  "threshold": 0,
+  "reporters": [
+    "html",
+    "json",
+    "markdown",
+    "ai",
+    "console"
+  ],
+  "ignore": [
+    "**/__snapshots__/**",
+    "**/node_modules/**",
+    "**/.cache/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/cov/**",
+    "**/reports/**",
+    "**/build/**",
+    "**/target/**",
+    "**/vendor/**",
+    "**/refactor/**",
+    "**/cargo-dupes/tests/fixtures/**",
+    "**/code-dupes/tests/fixtures/**"
+  ],
+  "format": [
+    "rust"
+  ],
+  "output": "./cov",
+  "absolute": true,
+  "minLines": 2,
+  "minTokens": 50
+}

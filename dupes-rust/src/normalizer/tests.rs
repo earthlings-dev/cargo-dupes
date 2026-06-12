@@ -14,6 +14,8 @@ fn normalize_code_expr(code: &str) -> NormalizedNode {
     normalize_expr(&expr, &mut ctx)
 }
 
+// jscpd:ignore-start
+
 #[test]
 fn renamed_variables_produce_identical_trees() {
     let code1 = "fn foo(x: i32) -> i32 { let y = x + 1; y }";
@@ -25,6 +27,8 @@ fn renamed_variables_produce_identical_trees() {
     assert_eq!(sig1, sig2);
     assert_eq!(body1, body2);
 }
+
+// jscpd:ignore-end
 
 #[test]
 fn structural_changes_produce_different_trees() {
@@ -61,6 +65,22 @@ fn bool_literals_normalize_as_placeholders() {
 }
 
 #[test]
+fn multi_segment_expression_paths_are_path_nodes() {
+    let n = normalize_code_expr("foo::bar");
+    assert_eq!(n.kind, NodeKind::Path);
+    assert_eq!(n.children.len(), 2);
+}
+
+#[test]
+fn multi_segment_type_paths_are_type_path_nodes() {
+    let ty: syn::Type = syn::parse_str("std::vec::Vec<i32>").unwrap();
+    let mut ctx = NormalizationContext::new();
+    let n = normalize_type(&ty, &mut ctx);
+    assert_eq!(n.kind, NodeKind::TypePath);
+    assert_eq!(n.children.len(), 3);
+}
+
+#[test]
 fn binary_ops_preserved() {
     let n1 = normalize_code_expr("a + b");
     let n2 = normalize_code_expr("a - b");
@@ -74,6 +94,37 @@ fn method_calls_normalized() {
     let n1 = normalize_code_expr(code1);
     let n2 = normalize_code_expr(code2);
     assert_eq!(n1, n2);
+}
+
+#[test]
+fn method_name_preserved_as_token() {
+    let node = normalize_code_expr("x.foo(y)");
+    assert_eq!(node.kind, NodeKind::MethodCall);
+    assert_eq!(node.children[1].kind, NodeKind::Token("foo".to_string()));
+}
+
+#[test]
+fn different_method_names_get_different_fingerprints() {
+    let n1 = normalize_code_expr("ch.is_ascii_alphabetic()");
+    let n2 = normalize_code_expr("ch.is_ascii_alphanumeric()");
+    assert_ne!(n1, n2);
+    assert_ne!(
+        dupes_core::fingerprint::Fingerprint::from_node(&n1),
+        dupes_core::fingerprint::Fingerprint::from_node(&n2)
+    );
+}
+
+#[test]
+fn method_call_fingerprint_pin() {
+    // The registry (.dupes-ignore.toml) records fingerprints from this
+    // method-name-preserving regime; any change to this value means every
+    // registered entry just went stale.
+    let f = parse_fn("fn probe(x: &str) -> usize { x.trim().len() + 1 }");
+    let (_, body) = normalize_item_fn(&f);
+    assert_eq!(
+        dupes_core::fingerprint::Fingerprint::from_node(&body).to_hex(),
+        "80a3bfe1fbf90075"
+    );
 }
 
 #[test]
@@ -153,12 +204,12 @@ fn reference_expressions_normalized() {
 
 #[test]
 fn impl_block_methods_normalized() {
-    let code = r#"
+    let code = r"
         impl Foo {
             fn bar(&self) -> i32 { self.x + 1 }
             fn baz(&mut self, val: i32) { self.x = val; }
         }
-    "#;
+    ";
     let item: syn::ItemImpl = syn::parse_str(code).unwrap();
     let methods = normalize_impl_block(&item);
     assert_eq!(methods.len(), 2);
@@ -200,9 +251,11 @@ fn range_expression_normalized() {
     assert!(!n.children[1].is_none());
 }
 
+// jscpd:ignore-start
+
 #[test]
 fn complex_function_normalization() {
-    let code1 = r#"
+    let code1 = r"
         fn process(data: Vec<i32>) -> Result<i32, String> {
             let mut sum = 0;
             for item in data.iter() {
@@ -212,8 +265,8 @@ fn complex_function_normalization() {
             }
             Ok(sum)
         }
-    "#;
-    let code2 = r#"
+    ";
+    let code2 = r"
         fn compute(values: Vec<i32>) -> Result<i32, String> {
             let mut total = 0;
             for val in values.iter() {
@@ -223,7 +276,7 @@ fn complex_function_normalization() {
             }
             Ok(total)
         }
-    "#;
+    ";
     let f1 = parse_fn(code1);
     let f2 = parse_fn(code2);
     let (sig1, body1) = normalize_item_fn(&f1);
@@ -231,6 +284,8 @@ fn complex_function_normalization() {
     assert_eq!(sig1, sig2);
     assert_eq!(body1, body2);
 }
+
+// jscpd:ignore-end
 
 #[test]
 fn macro_invocations_produce_macro_call() {
@@ -244,7 +299,7 @@ fn macro_invocations_produce_macro_call() {
                 NormalizedNode::leaf(NodeKind::Literal(LiteralKind::Str))
             );
         }
-        _ => panic!("Expected MacroCall node, got {:?}", n),
+        _ => panic!("Expected MacroCall node, got {n:?}"),
     }
 }
 
@@ -277,7 +332,7 @@ fn vec_macro_normalized() {
             assert_eq!(name, "vec");
             assert_eq!(n.children.len(), 3);
         }
-        _ => panic!("Expected MacroCall node, got {:?}", n),
+        _ => panic!("Expected MacroCall node, got {n:?}"),
     }
 }
 
@@ -288,7 +343,7 @@ fn multi_segment_macro_path_uses_last_segment() {
         NodeKind::MacroCall { name } => {
             assert_eq!(name, "println");
         }
-        _ => panic!("Expected MacroCall node, got {:?}", n),
+        _ => panic!("Expected MacroCall node, got {n:?}"),
     }
 }
 
@@ -308,7 +363,7 @@ fn unparseable_macro_args_produce_opaque() {
             assert_eq!(n.children.len(), 1);
             assert_eq!(n.children[0], NormalizedNode::leaf(NodeKind::Opaque));
         }
-        _ => panic!("Expected MacroCall node, got {:?}", n),
+        _ => panic!("Expected MacroCall node, got {n:?}"),
     }
 }
 
@@ -423,6 +478,57 @@ fn empty_block_normalized() {
     let (_, body) = normalize_item_fn(&f);
     assert_eq!(body.kind, NodeKind::Block);
     assert!(body.children.is_empty());
+}
+
+#[test]
+fn break_expression_normalized() {
+    let with_value = normalize_code_expr("loop { break 42; }");
+    let without_value = normalize_code_expr("loop { break; }");
+    assert_ne!(with_value, without_value);
+    assert_eq!(
+        normalize_code_expr("loop { break 42; }"),
+        normalize_code_expr("loop { break 99; }"),
+    );
+}
+
+#[test]
+fn paren_expression_normalized() {
+    let n = normalize_code_expr("(x + 1)");
+    assert_eq!(n.kind, NodeKind::Paren);
+    assert_eq!(n.children.len(), 1);
+}
+
+#[test]
+fn repeat_expression_normalized() {
+    let n = normalize_code_expr("[0; 16]");
+    assert_eq!(n.kind, NodeKind::Repeat);
+    assert_eq!(n.children.len(), 2);
+}
+
+#[test]
+fn or_and_slice_patterns_normalized() {
+    assert_ne!(
+        normalize_code_expr("match x { 1 | 2 => 0, _ => 1 }"),
+        normalize_code_expr("match x { [first, rest @ ..] => 0, _ => 1 }"),
+        "or-patterns and slice patterns keep distinct shapes"
+    );
+    assert_eq!(
+        normalize_code_expr("match x { [a, b] => 0, _ => 1 }"),
+        normalize_code_expr("match y { [c, d] => 0, _ => 1 }"),
+    );
+}
+
+#[test]
+fn type_reference_and_slice_normalized() {
+    let f1 = parse_fn("fn foo(values: &[i32]) -> &mut i32 { unimplemented!() }");
+    let f2 = parse_fn("fn bar(items: &[u64]) -> &mut u64 { unimplemented!() }");
+    let (sig1, _) = normalize_item_fn(&f1);
+    let (sig2, _) = normalize_item_fn(&f2);
+    assert_eq!(sig1, sig2);
+
+    let f3 = parse_fn("fn baz(values: &mut [i32]) -> &i32 { unimplemented!() }");
+    let (sig3, _) = normalize_item_fn(&f3);
+    assert_ne!(sig1, sig3, "mutability is preserved in reference types");
 }
 
 #[test]

@@ -24,40 +24,35 @@ pub fn normalize_ts_node(
 ) -> NormalizedNode {
     let kind = node.kind();
 
-    // 1. Error/missing nodes → Opaque
-    if kind == "ERROR" || kind == "MISSING" {
+    // 1. Kinds that normalize to Opaque: parse errors, configured skips
+    //    (a safety net when called directly), and configured opaque kinds.
+    if kind == "ERROR"
+        || kind == "MISSING"
+        || mapping.skip_kinds.contains(kind)
+        || mapping.opaque_kinds.contains(kind)
+    {
         return NormalizedNode::leaf(NodeKind::Opaque);
     }
 
-    // 2. Skip kinds → shouldn't be called directly, but return Opaque as safety
-    if mapping.skip_kinds.contains(kind) {
-        return NormalizedNode::leaf(NodeKind::Opaque);
-    }
-
-    // 3. Opaque kinds → leaf
-    if mapping.opaque_kinds.contains(kind) {
-        return NormalizedNode::leaf(NodeKind::Opaque);
-    }
-
-    // 4. Identifiers → Placeholder
+    // 2. Identifiers → Placeholder
     if mapping.identifier_kinds.contains(kind) {
         let text = node_text(node, source);
         let idx = ctx.placeholder(&text, PlaceholderKind::Variable);
         return NormalizedNode::leaf(NodeKind::Placeholder(PlaceholderKind::Variable, idx));
     }
 
-    // 5. Literals → Literal(kind)
+    // 3. Literals → Literal(kind)
     if let Some(lit_kind) = mapping.literal_kinds.get(kind) {
         return NormalizedNode::leaf(NodeKind::Literal(lit_kind.clone()));
     }
 
-    // 5b. Direct node-kind-to-NodeKind mappings
+    // 4. Direct node-kind-to-NodeKind mappings
     if let Some(mapped_kind) = mapping.node_kinds.get(kind) {
         let children = normalize_named_children(node, source, mapping, ctx);
         return NormalizedNode::with_children(mapped_kind.clone(), children);
     }
 
-    // 6. Structural kinds
+    // 5. Structural kinds
 
     // If/conditional
     if mapping.if_kinds.contains(kind) {
@@ -97,8 +92,7 @@ pub fn normalize_ts_node(
 
     // Block
     if mapping.block_kinds.contains(kind) {
-        let children = normalize_named_children(node, source, mapping, ctx);
-        return NormalizedNode::with_children(NodeKind::Block, children);
+        return normalize_as_block(node, source, mapping, ctx);
     }
 
     // Assignment
@@ -108,11 +102,10 @@ pub fn normalize_ts_node(
 
     // Function definitions (nested)
     if mapping.function_def_kinds.contains(kind) {
-        let children = normalize_named_children(node, source, mapping, ctx);
-        return NormalizedNode::with_children(NodeKind::Block, children);
+        return normalize_as_block(node, source, mapping, ctx);
     }
 
-    // 7. Binary/unary expressions — driven by mapping
+    // 6. Binary/unary expressions — driven by mapping
     if mapping.binary_op_kinds.contains(kind) {
         return normalize_binary_op(node, source, mapping, ctx);
     }
@@ -121,12 +114,12 @@ pub fn normalize_ts_node(
         return normalize_unary_op(node, source, mapping, ctx);
     }
 
-    // 8. Anonymous nodes → skip (shouldn't reach here normally)
+    // 7. Anonymous nodes → skip (shouldn't reach here normally)
     if !node.is_named() {
         return NormalizedNode::leaf(NodeKind::Opaque);
     }
 
-    // 9. Unknown named nodes → recursively normalize children, wrap in Block
+    // 8. Unknown named nodes → recursively normalize children, wrap in Block
     let mut children = normalize_named_children(node, source, mapping, ctx);
     if children.is_empty() {
         return NormalizedNode::leaf(NodeKind::Opaque);
@@ -154,6 +147,19 @@ pub(crate) fn normalize_named_children(
         children.push(normalize_ts_node(child, source, mapping, ctx));
     }
     children
+}
+
+/// Normalize a node's named children and wrap them in a `Block`.
+fn normalize_as_block(
+    node: tree_sitter::Node,
+    source: &[u8],
+    mapping: &NodeMapping,
+    ctx: &mut NormalizationContext,
+) -> NormalizedNode {
+    NormalizedNode::with_children(
+        NodeKind::Block,
+        normalize_named_children(node, source, mapping, ctx),
+    )
 }
 
 /// Get a field child by name, normalizing it, or return `NormalizedNode::none()`.
@@ -184,13 +190,25 @@ fn find_operator_text(node: tree_sitter::Node, source: &[u8]) -> Option<String> 
     None
 }
 
+/// Map a node's operator text through an operator table, with a fallback.
+fn lookup_operator_kind<T: Clone>(
+    node: tree_sitter::Node,
+    source: &[u8],
+    map: &std::collections::HashMap<&'static str, T>,
+    fallback: T,
+) -> T {
+    find_operator_text(node, source)
+        .and_then(|text| map.get(text.as_str()).cloned())
+        .unwrap_or(fallback)
+}
+
 /// Get the text of a tree-sitter node.
 fn node_text(node: tree_sitter::Node, source: &[u8]) -> String {
     node.utf8_text(source).unwrap_or("").to_string()
 }
 
 /// Normalize an if/conditional construct.
-/// Produces: [condition, then_branch, else_or_None]
+/// Produces: [condition, `then_branch`, `else_or_None`]
 fn normalize_if(
     node: tree_sitter::Node,
     source: &[u8],
@@ -234,9 +252,15 @@ fn normalize_while(
     mapping: &NodeMapping,
     ctx: &mut NormalizationContext,
 ) -> NormalizedNode {
-    let condition = get_field_or_none(node, "condition", source, mapping, ctx);
-    let body = get_field_or_none(node, "body", source, mapping, ctx);
-    NormalizedNode::with_children(NodeKind::While, vec![condition, body])
+    normalize_two_fields(
+        node,
+        source,
+        mapping,
+        ctx,
+        NodeKind::While,
+        "condition",
+        "body",
+    )
 }
 
 /// Normalize a match/switch construct.
@@ -312,9 +336,29 @@ fn normalize_assignment(
     mapping: &NodeMapping,
     ctx: &mut NormalizationContext,
 ) -> NormalizedNode {
-    let left = get_field_or_none(node, "left", source, mapping, ctx);
-    let right = get_field_or_none(node, "right", source, mapping, ctx);
-    NormalizedNode::with_children(NodeKind::Assign, vec![left, right])
+    normalize_two_fields(
+        node,
+        source,
+        mapping,
+        ctx,
+        NodeKind::Assign,
+        "left",
+        "right",
+    )
+}
+
+fn normalize_two_fields(
+    node: tree_sitter::Node,
+    source: &[u8],
+    mapping: &NodeMapping,
+    ctx: &mut NormalizationContext,
+    kind: NodeKind,
+    first_field: &str,
+    second_field: &str,
+) -> NormalizedNode {
+    let first = get_field_or_none(node, first_field, source, mapping, ctx);
+    let second = get_field_or_none(node, second_field, source, mapping, ctx);
+    NormalizedNode::with_children(kind, vec![first, second])
 }
 
 /// Normalize a binary operation.
@@ -329,9 +373,7 @@ fn normalize_binary_op(
     mapping: &NodeMapping,
     ctx: &mut NormalizationContext,
 ) -> NormalizedNode {
-    let op_kind = find_operator_text(node, source)
-        .and_then(|text| mapping.binary_op_map.get(text.as_str()).cloned())
-        .unwrap_or(BinOpKind::Other);
+    let op_kind = lookup_operator_kind(node, source, &mapping.binary_op_map, BinOpKind::Other);
 
     // Try field-based access first (binary_operator, boolean_operator)
     let left_field = node.child_by_field_name("left");
@@ -386,9 +428,7 @@ fn normalize_unary_op(
     mapping: &NodeMapping,
     ctx: &mut NormalizationContext,
 ) -> NormalizedNode {
-    let op_kind = find_operator_text(node, source)
-        .and_then(|text| mapping.unary_op_map.get(text.as_str()).cloned())
-        .unwrap_or(UnOpKind::Other);
+    let op_kind = lookup_operator_kind(node, source, &mapping.unary_op_map, UnOpKind::Other);
 
     let operand_node = node
         .child_by_field_name("argument")
@@ -455,10 +495,14 @@ mod tests {
     }
 
     /// Get the first named child of the root (typically a statement).
-    fn first_stmt<'a>(tree: &'a tree_sitter::Tree) -> tree_sitter::Node<'a> {
+    fn first_stmt(tree: &tree_sitter::Tree) -> tree_sitter::Node<'_> {
         let root = tree.root_node();
         let cursor = &mut root.walk();
         root.named_children(cursor).next().unwrap()
+    }
+
+    fn has_opaque(n: &NormalizedNode) -> bool {
+        n.kind == NodeKind::Opaque || n.children.iter().any(has_opaque)
     }
 
     #[test]
@@ -487,6 +531,8 @@ mod tests {
             NodeKind::Placeholder(PlaceholderKind::Variable, 0)
         );
     }
+
+    // jscpd:ignore-start
 
     #[test]
     fn two_identifiers_get_different_indices() {
@@ -567,8 +613,8 @@ mod tests {
         let a = first_stmt(&tree_a).named_child(0).unwrap();
         let b = first_stmt(&tree_b).named_child(0).unwrap();
 
-        let na = normalize_ts_node(a, "42\n".as_bytes(), &mapping, &mut ctx_a);
-        let nb = normalize_ts_node(b, "99\n".as_bytes(), &mapping, &mut ctx_b);
+        let na = normalize_ts_node(a, b"42\n", &mapping, &mut ctx_a);
+        let nb = normalize_ts_node(b, b"99\n", &mapping, &mut ctx_b);
         assert_eq!(na, nb);
     }
 
@@ -817,10 +863,6 @@ mod tests {
         let root = tree.root_node();
         assert!(root.has_error());
         let node = normalize_ts_node(root, src.as_bytes(), &mapping, &mut ctx);
-
-        fn has_opaque(n: &NormalizedNode) -> bool {
-            n.kind == NodeKind::Opaque || n.children.iter().any(has_opaque)
-        }
         assert!(has_opaque(&node));
     }
 
@@ -837,6 +879,8 @@ mod tests {
         assert_eq!(node.kind, NodeKind::Block);
         assert_eq!(node.children.len(), 2);
     }
+
+    // jscpd:ignore-end
 
     #[test]
     fn single_child_unwrap() {

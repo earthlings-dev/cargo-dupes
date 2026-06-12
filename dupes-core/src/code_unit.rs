@@ -57,6 +57,8 @@ pub enum CodeUnitKind {
     TraitImplBlock,
     // Sub-function kinds
     IfBranch,
+    /// A run of consecutive `if` statements treated as one coherent unit.
+    IfChain,
     MatchArm,
     LoopBody,
     Block,
@@ -74,6 +76,7 @@ impl std::fmt::Display for CodeUnitKind {
             Self::ImplBlock => write!(f, "impl block"),
             Self::TraitImplBlock => write!(f, "trait impl block"),
             Self::IfBranch => write!(f, "if branch"),
+            Self::IfChain => write!(f, "if chain"),
             Self::MatchArm => write!(f, "match arm"),
             Self::LoopBody => write!(f, "loop body"),
             Self::Block => write!(f, "block"),
@@ -99,4 +102,8 @@ pub struct CodeUnit {
     pub parent_name: Option<String>,
     /// Whether this code unit was identified as test code by the language analyzer.
     pub is_test: bool,
+    /// Suppression rule that tagged this unit as a low-signal candidate.
+    pub suppressed: Option<crate::suppression::RuleId>,
+    /// For if-branch sub-units, the fingerprint of the owning if-chain unit.
+    pub parent_chain: Option<Fingerprint>,
 }

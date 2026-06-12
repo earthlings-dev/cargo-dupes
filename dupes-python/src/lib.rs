@@ -96,6 +96,8 @@ impl LanguageAnalyzer for PythonAnalyzer {
     }
 }
 
+// jscpd:ignore-start
+
 /// Build the Python-specific [`NodeMapping`].
 ///
 /// # Covered constructs
@@ -218,6 +220,8 @@ pub fn python_mapping() -> NodeMapping {
             ("subscript", NodeKind::Index),
         ])
 }
+
+// jscpd:ignore-end
 
 #[cfg(test)]
 mod tests {

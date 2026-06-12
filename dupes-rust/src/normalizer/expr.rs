@@ -1,7 +1,9 @@
 use dupes_core::node::{NodeKind, NormalizationContext, NormalizedNode, PlaceholderKind};
 
 use super::helpers::{
-    member_to_string, normalize_bin_op, normalize_lit, normalize_macro, normalize_un_op,
+    PlaceholderNodeRole, member_to_string, normalize_bin_op, normalize_list, normalize_lit,
+    normalize_macro, normalize_un_op, one_child_node, path_node_from_segments, path_segment_nodes,
+    placeholder_node, reference_node,
 };
 use super::pat::{normalize_pat, normalize_type};
 
@@ -9,36 +11,7 @@ use super::pat::{normalize_pat, normalize_type};
 pub fn normalize_expr(expr: &syn::Expr, ctx: &mut NormalizationContext) -> NormalizedNode {
     match expr {
         syn::Expr::Lit(el) => normalize_lit(&el.lit),
-        syn::Expr::Path(ep) => {
-            if ep.path.segments.len() == 1 {
-                let seg = &ep.path.segments[0];
-                let ident = seg.ident.to_string();
-                let kind = if ident.chars().next().is_some_and(char::is_uppercase) {
-                    PlaceholderKind::Type
-                } else {
-                    PlaceholderKind::Variable
-                };
-                let idx = ctx.placeholder(&ident, kind);
-                NormalizedNode::leaf(NodeKind::Placeholder(kind, idx))
-            } else {
-                let segments: Vec<NormalizedNode> = ep
-                    .path
-                    .segments
-                    .iter()
-                    .map(|seg| {
-                        let ident = seg.ident.to_string();
-                        let kind = if ident.chars().next().is_some_and(char::is_uppercase) {
-                            PlaceholderKind::Type
-                        } else {
-                            PlaceholderKind::Variable
-                        };
-                        let idx = ctx.placeholder(&ident, kind);
-                        NormalizedNode::leaf(NodeKind::Placeholder(kind, idx))
-                    })
-                    .collect();
-                NormalizedNode::with_children(NodeKind::Path, segments)
-            }
-        }
+        syn::Expr::Path(ep) => normalize_expr_path(&ep.path, ctx),
         // BinaryOp -> [left, right]
         syn::Expr::Binary(eb) => NormalizedNode::with_children(
             NodeKind::BinaryOp(normalize_bin_op(&eb.op)),
@@ -59,38 +32,32 @@ pub fn normalize_expr(expr: &syn::Expr, ctx: &mut NormalizationContext) -> Norma
             NormalizedNode::with_children(NodeKind::Call, children)
         }
         // MethodCall -> [receiver, method, arg0, ...]
+        // The method name is preserved as a Token leaf: which method runs is
+        // behavior, not naming, so `x.is_ascii_alphabetic()` must never
+        // fingerprint equal to `x.is_ascii_alphanumeric()`.
         syn::Expr::MethodCall(emc) => {
-            let method_idx = ctx.placeholder(&emc.method.to_string(), PlaceholderKind::Function);
             let mut children = vec![
                 normalize_expr(&emc.receiver, ctx),
-                NormalizedNode::leaf(NodeKind::Placeholder(PlaceholderKind::Function, method_idx)),
+                NormalizedNode::leaf(NodeKind::Token(emc.method.to_string())),
             ];
             children.extend(emc.args.iter().map(|a| normalize_expr(a, ctx)));
             NormalizedNode::with_children(NodeKind::MethodCall, children)
         }
         // FieldAccess -> [base, field]
-        syn::Expr::Field(ef) => {
-            let field_idx =
-                ctx.placeholder(&member_to_string(&ef.member), PlaceholderKind::Variable);
-            NormalizedNode::with_children(
-                NodeKind::FieldAccess,
-                vec![
-                    normalize_expr(&ef.base, ctx),
-                    NormalizedNode::leaf(NodeKind::Placeholder(
-                        PlaceholderKind::Variable,
-                        field_idx,
-                    )),
-                ],
-            )
-        }
-        // Index -> [base, index]
-        syn::Expr::Index(ei) => NormalizedNode::with_children(
-            NodeKind::Index,
+        syn::Expr::Field(ef) => NormalizedNode::with_children(
+            NodeKind::FieldAccess,
             vec![
-                normalize_expr(&ei.expr, ctx),
-                normalize_expr(&ei.index, ctx),
+                normalize_expr(&ef.base, ctx),
+                placeholder_node(
+                    ctx,
+                    &member_to_string(&ef.member),
+                    PlaceholderKind::Variable,
+                    PlaceholderNodeRole::Expr,
+                ),
             ],
         ),
+        // Index -> [base, index]
+        syn::Expr::Index(ei) => normalize_expr_pair(NodeKind::Index, &ei.expr, &ei.index, ctx),
         // Closure -> [body, param0, param1, ...]
         syn::Expr::Closure(ec) => {
             let mut children = vec![normalize_expr(&ec.body, ctx)];
@@ -98,52 +65,24 @@ pub fn normalize_expr(expr: &syn::Expr, ctx: &mut NormalizationContext) -> Norma
             NormalizedNode::with_children(NodeKind::Closure, children)
         }
         // Return -> [] or [value]
-        syn::Expr::Return(er) => {
-            let children: Vec<_> = er
-                .expr
-                .as_ref()
-                .map(|e| vec![normalize_expr(e, ctx)])
-                .unwrap_or_default();
-            NormalizedNode::with_children(NodeKind::Return, children)
-        }
+        syn::Expr::Return(er) => node_with_optional_expr(NodeKind::Return, er.expr.as_deref(), ctx),
         // Break -> [] or [value]
-        syn::Expr::Break(eb) => {
-            let children: Vec<_> = eb
-                .expr
-                .as_ref()
-                .map(|e| vec![normalize_expr(e, ctx)])
-                .unwrap_or_default();
-            NormalizedNode::with_children(NodeKind::Break, children)
-        }
+        syn::Expr::Break(eb) => node_with_optional_expr(NodeKind::Break, eb.expr.as_deref(), ctx),
         syn::Expr::Continue(_) => NormalizedNode::leaf(NodeKind::Continue),
         // Assign -> [left, right]
-        syn::Expr::Assign(ea) => NormalizedNode::with_children(
-            NodeKind::Assign,
-            vec![
-                normalize_expr(&ea.left, ctx),
-                normalize_expr(&ea.right, ctx),
-            ],
-        ),
+        syn::Expr::Assign(ea) => normalize_expr_pair(NodeKind::Assign, &ea.left, &ea.right, ctx),
         // Reference -> [expr]
-        syn::Expr::Reference(er) => NormalizedNode::with_children(
-            NodeKind::Reference {
-                mutable: er.mutability.is_some(),
-            },
-            vec![normalize_expr(&er.expr, ctx)],
+        syn::Expr::Reference(er) => reference_node(
+            er.mutability.as_ref(),
+            PlaceholderNodeRole::Expr,
+            &*er.expr,
+            ctx,
+            normalize_expr,
         ),
-        syn::Expr::Tuple(et) => NormalizedNode::with_children(
-            NodeKind::Tuple,
-            et.elems.iter().map(|e| normalize_expr(e, ctx)).collect(),
-        ),
-        syn::Expr::Array(ea) => NormalizedNode::with_children(
-            NodeKind::Array,
-            ea.elems.iter().map(|e| normalize_expr(e, ctx)).collect(),
-        ),
+        syn::Expr::Tuple(et) => normalize_list(NodeKind::Tuple, &et.elems, ctx, normalize_expr),
+        syn::Expr::Array(ea) => normalize_list(NodeKind::Array, &ea.elems, ctx, normalize_expr),
         // Repeat -> [elem, len]
-        syn::Expr::Repeat(er) => NormalizedNode::with_children(
-            NodeKind::Repeat,
-            vec![normalize_expr(&er.expr, ctx), normalize_expr(&er.len, ctx)],
-        ),
+        syn::Expr::Repeat(er) => normalize_expr_pair(NodeKind::Repeat, &er.expr, &er.len, ctx),
         // Cast -> [expr, ty]
         syn::Expr::Cast(ec) => NormalizedNode::with_children(
             NodeKind::Cast,
@@ -171,13 +110,9 @@ pub fn normalize_expr(expr: &syn::Expr, ctx: &mut NormalizationContext) -> Norma
             NormalizedNode::with_children(NodeKind::StructInit, children)
         }
         // Await -> [expr]
-        syn::Expr::Await(ea) => {
-            NormalizedNode::with_children(NodeKind::Await, vec![normalize_expr(&ea.base, ctx)])
-        }
+        syn::Expr::Await(ea) => one_child_node(NodeKind::Await, &*ea.base, ctx, normalize_expr),
         // Try -> [expr]
-        syn::Expr::Try(et) => {
-            NormalizedNode::with_children(NodeKind::Try, vec![normalize_expr(&et.expr, ctx)])
-        }
+        syn::Expr::Try(et) => one_child_node(NodeKind::Try, &*et.expr, ctx, normalize_expr),
         // If -> [condition, then_branch, else_or_None]
         syn::Expr::If(ei) => NormalizedNode::with_children(
             NodeKind::If,
@@ -206,9 +141,7 @@ pub fn normalize_expr(expr: &syn::Expr, ctx: &mut NormalizationContext) -> Norma
             NormalizedNode::with_children(NodeKind::Match, children)
         }
         // Loop -> [body]
-        syn::Expr::Loop(el) => {
-            NormalizedNode::with_children(NodeKind::Loop, vec![normalize_block(&el.body, ctx)])
-        }
+        syn::Expr::Loop(el) => one_child_node(NodeKind::Loop, &el.body, ctx, normalize_block),
         // While -> [condition, body]
         syn::Expr::While(ew) => NormalizedNode::with_children(
             NodeKind::While,
@@ -228,16 +161,13 @@ pub fn normalize_expr(expr: &syn::Expr, ctx: &mut NormalizationContext) -> Norma
         ),
         syn::Expr::Block(eb) => normalize_block(&eb.block, ctx),
         // Paren -> [expr]
-        syn::Expr::Paren(ep) => {
-            NormalizedNode::with_children(NodeKind::Paren, vec![normalize_expr(&ep.expr, ctx)])
-        }
+        syn::Expr::Paren(ep) => one_child_node(NodeKind::Paren, &*ep.expr, ctx, normalize_expr),
         // Range -> [from_or_None, to_or_None]
-        syn::Expr::Range(er) => NormalizedNode::with_children(
+        syn::Expr::Range(er) => node_with_optional_expr_pair(
             NodeKind::Range,
-            vec![
-                NormalizedNode::opt(er.start.as_ref().map(|e| normalize_expr(e, ctx))),
-                NormalizedNode::opt(er.end.as_ref().map(|e| normalize_expr(e, ctx))),
-            ],
+            er.start.as_deref(),
+            er.end.as_deref(),
+            ctx,
         ),
         // LetExpr -> [pat, expr]
         syn::Expr::Let(el) => NormalizedNode::with_children(
@@ -277,20 +207,12 @@ pub fn normalize_stmt(stmt: &syn::Stmt, ctx: &mut NormalizationContext) -> Norma
         ),
         syn::Stmt::Expr(expr, semi) => {
             let normalized = normalize_expr(expr, ctx);
-            if semi.is_some() {
-                NormalizedNode::with_children(NodeKind::Semi, vec![normalized])
-            } else {
-                normalized
-            }
+            with_optional_semi(normalized, semi.is_some())
         }
         syn::Stmt::Item(_) => NormalizedNode::leaf(NodeKind::Opaque),
         syn::Stmt::Macro(sm) => {
             let normalized = normalize_macro(&sm.mac, ctx);
-            if sm.semi_token.is_some() {
-                NormalizedNode::with_children(NodeKind::Semi, vec![normalized])
-            } else {
-                normalized
-            }
+            with_optional_semi(normalized, sm.semi_token.is_some())
         }
     }
 }
@@ -300,4 +222,67 @@ pub fn normalize_block(block: &syn::Block, ctx: &mut NormalizationContext) -> No
         NodeKind::Block,
         block.stmts.iter().map(|s| normalize_stmt(s, ctx)).collect(),
     )
+}
+
+/// Build a node from a fixed pair of child expressions.
+fn normalize_expr_pair(
+    kind: NodeKind,
+    left: &syn::Expr,
+    right: &syn::Expr,
+    ctx: &mut NormalizationContext,
+) -> NormalizedNode {
+    NormalizedNode::with_children(
+        kind,
+        vec![normalize_expr(left, ctx), normalize_expr(right, ctx)],
+    )
+}
+
+/// Build a node whose children are an optional expression payload.
+fn node_with_optional_expr(
+    kind: NodeKind,
+    expr: Option<&syn::Expr>,
+    ctx: &mut NormalizationContext,
+) -> NormalizedNode {
+    let children = expr
+        .map(|expr| vec![normalize_expr(expr, ctx)])
+        .unwrap_or_default();
+    NormalizedNode::with_children(kind, children)
+}
+
+/// Build a range-like node from optional start/end payloads, keeping the
+/// `None` sentinel positions.
+pub(super) fn node_with_optional_expr_pair(
+    kind: NodeKind,
+    start: Option<&syn::Expr>,
+    end: Option<&syn::Expr>,
+    ctx: &mut NormalizationContext,
+) -> NormalizedNode {
+    NormalizedNode::with_children(
+        kind,
+        vec![
+            NormalizedNode::opt(start.map(|e| normalize_expr(e, ctx))),
+            NormalizedNode::opt(end.map(|e| normalize_expr(e, ctx))),
+        ],
+    )
+}
+
+fn normalize_expr_path(path: &syn::Path, ctx: &mut NormalizationContext) -> NormalizedNode {
+    let segments = path_segment_nodes(ctx, path, |ctx, ident| {
+        let kind = if ident.chars().next().is_some_and(char::is_uppercase) {
+            PlaceholderKind::Type
+        } else {
+            PlaceholderKind::Variable
+        };
+        placeholder_node(ctx, ident, kind, PlaceholderNodeRole::Expr)
+    });
+
+    path_node_from_segments(segments, true, NodeKind::Path)
+}
+
+fn with_optional_semi(normalized: NormalizedNode, has_semi: bool) -> NormalizedNode {
+    if has_semi {
+        NormalizedNode::with_children(NodeKind::Semi, vec![normalized])
+    } else {
+        normalized
+    }
 }

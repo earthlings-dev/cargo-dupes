@@ -189,23 +189,23 @@ pub enum NodeKind {
 
 /// A normalized AST node. Uses a data-driven `{ kind, children }` representation
 /// instead of a large enum with differently-shaped variants. This allows generic
-/// traversal algorithms (count_nodes, reindex, count_matching, extract) to work
+/// traversal algorithms (`count_nodes`, reindex, `count_matching`, extract) to work
 /// without exhaustive matching on every variant.
 ///
 /// ## Child ordering conventions
 ///
 /// - **Fixed with None sentinels** (always same child count):
-///   - `If` -> [condition, then_branch, else_or_None]
-///   - `LetBinding` -> [pattern, type_or_None, init_or_None, diverge_or_None]
-///   - `Range` / `PatRange` -> [from_or_None, to_or_None]
-///   - `MatchArm` -> [pattern, guard_or_None, body]
+///   - `If` -> [condition, `then_branch`, `else_or_None`]
+///   - `LetBinding` -> [pattern, `type_or_None`, `init_or_None`, `diverge_or_None`]
+///   - `Range` / `PatRange` -> [`from_or_None`, `to_or_None`]
+///   - `MatchArm` -> [pattern, `guard_or_None`, body]
 /// - **Fixed children first, variable after** (for zip alignment):
 ///   - `Call` -> [func, arg0, arg1, ...]
 ///   - `MethodCall` -> [receiver, method, arg0, ...]
 ///   - `Closure` -> [body, param0, ...]
-///   - `FnSignature` -> [return_type_or_None, param0, ...]
+///   - `FnSignature` -> [`return_type_or_None`, param0, ...]
 ///   - `Match` -> [expr, arm0, arm1, ...]
-///   - `StructInit` -> [rest_or_None, field0, field1, ...]
+///   - `StructInit` -> [`rest_or_None`, field0, field1, ...]
 ///   - `MacroCall` -> [arg0, arg1, ...]
 /// - **Variable-length (0 or 1)**: `Return`, `Break` -> [] or [value]
 /// - **Homogeneous**: `Block`, `Tuple`, `Array`, `Path`, `PatTuple`, etc. -> [elem0, ...]
@@ -252,7 +252,7 @@ impl NormalizedNode {
 
 /// Tracks identifier-to-placeholder mappings during normalization.
 pub struct NormalizationContext {
-    /// Maps (identifier_string, kind) -> placeholder index
+    /// Maps (`identifier_string`, kind) -> placeholder index
     mappings: HashMap<(String, PlaceholderKind), usize>,
     /// Per-kind counters
     counters: HashMap<PlaceholderKind, usize>,
@@ -290,7 +290,7 @@ impl Default for NormalizationContext {
 // -- Placeholder re-indexing --------------------------------------------------
 
 /// Collects all placeholder occurrences in depth-first order, building
-/// a mapping from (kind, old_index) -> new_sequential_index.
+/// a mapping from (kind, `old_index`) -> `new_sequential_index`.
 fn collect_placeholder_order(
     node: &NormalizedNode,
     order: &mut Vec<(PlaceholderKind, usize)>,
@@ -318,16 +318,13 @@ fn apply_reindex(
 ) -> NormalizedNode {
     let kind = match &node.kind {
         NodeKind::Placeholder(kind, idx) => {
-            let new_idx = mapping.get(&(*kind, *idx)).copied().unwrap_or(*idx);
-            NodeKind::Placeholder(*kind, new_idx)
+            remap_placeholder(NodeKind::Placeholder, mapping, *kind, *idx)
         }
         NodeKind::PatPlaceholder(kind, idx) => {
-            let new_idx = mapping.get(&(*kind, *idx)).copied().unwrap_or(*idx);
-            NodeKind::PatPlaceholder(*kind, new_idx)
+            remap_placeholder(NodeKind::PatPlaceholder, mapping, *kind, *idx)
         }
         NodeKind::TypePlaceholder(kind, idx) => {
-            let new_idx = mapping.get(&(*kind, *idx)).copied().unwrap_or(*idx);
-            NodeKind::TypePlaceholder(*kind, new_idx)
+            remap_placeholder(NodeKind::TypePlaceholder, mapping, *kind, *idx)
         }
         other => other.clone(),
     };
@@ -337,6 +334,16 @@ fn apply_reindex(
         .map(|c| apply_reindex(c, mapping))
         .collect();
     NormalizedNode { kind, children }
+}
+
+/// Rebuild a placeholder variant with its index remapped through `mapping`.
+fn remap_placeholder(
+    make: impl FnOnce(PlaceholderKind, usize) -> NodeKind,
+    mapping: &HashMap<(PlaceholderKind, usize), usize>,
+    kind: PlaceholderKind,
+    idx: usize,
+) -> NodeKind {
+    make(kind, mapping.get(&(kind, idx)).copied().unwrap_or(idx))
 }
 
 /// Re-index all placeholders in a sub-tree so that indices start from 0
@@ -372,6 +379,8 @@ pub fn count_nodes(node: &NormalizedNode) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // jscpd:ignore-start
 
     #[test]
     fn reindex_remaps_from_zero() {
@@ -476,6 +485,8 @@ mod tests {
             reindex_placeholders(&subtree2)
         );
     }
+
+    // jscpd:ignore-end
 
     #[test]
     fn reindex_handles_multiple_placeholder_kinds() {
