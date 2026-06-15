@@ -7,11 +7,11 @@ use crate::analyzer::LanguageAnalyzer;
 use crate::code_unit::DetectionDimension;
 use crate::config::Config;
 use crate::fingerprint::Fingerprint;
-use crate::grouper::DuplicateGroup;
+use crate::grouper::{DuplicateGroup, DuplicationStats};
 use crate::ignore::{self, IgnoreEntry};
 use crate::output::json::JsonReporter;
 use crate::output::text::TextReporter;
-use crate::output::{ReportOptions, ReportSection, Reporter};
+use crate::output::{ReportOptions, Reporter};
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -590,58 +590,27 @@ pub fn cmd_check(
     writer: &mut impl Write,
     thresholds: &CheckThresholds,
 ) -> CliResult {
-    let max_exact = thresholds.max_exact.or(config.max_exact_duplicates);
-    let max_near = thresholds.max_near.or(config.max_near_duplicates);
-    let max_exact_pct = thresholds.max_exact_percent.or(config.max_exact_percent);
-    let max_near_pct = thresholds.max_near_percent.or(config.max_near_percent);
+    let resolved = CheckThresholds {
+        max_exact: thresholds.max_exact.or(config.max_exact_duplicates),
+        max_near: thresholds.max_near.or(config.max_near_duplicates),
+        max_exact_percent: thresholds.max_exact_percent.or(config.max_exact_percent),
+        max_near_percent: thresholds.max_near_percent.or(config.max_near_percent),
+    };
+    let outcome = evaluate_check(&resolved, &result.stats);
 
-    reporter.report_stats(&result.stats, writer)?;
-
-    let mut failed = false;
-    let exact_group_count = result.stats.exact_duplicate_groups
-        + result.stats.sub_exact_groups
-        + result.stats.token_normalized_exact_groups
-        + result.stats.token_raw_exact_groups
-        + result.stats.line_exact_groups;
-    let near_group_count = result.stats.near_duplicate_groups
-        + result.stats.sub_near_groups
-        + result.stats.token_normalized_near_groups;
-
-    failed |= check_count_threshold(
-        max_exact,
-        exact_group_count,
-        "exact",
-        result,
-        reporter,
-        writer,
-    )?;
-    failed |= check_count_threshold(max_near, near_group_count, "near", result, reporter, writer)?;
-
-    failed |= check_percent_threshold(
-        max_exact_pct,
-        result.stats.exact_duplicate_percent(),
-        "exact",
-        &result.exact_groups,
-        ReportSection::Exact,
-        reporter,
-        writer,
-    )?;
-
-    failed |= check_percent_threshold(
-        max_near_pct,
-        result.stats.near_duplicate_percent(),
-        "near",
-        &result.near_groups,
-        ReportSection::Near,
-        reporter,
-        writer,
-    )?;
-
-    if failed {
-        Err(CliError::CheckFailed)
-    } else {
+    if outcome.passed {
+        reporter.report_stats(&result.stats, writer)?;
         writeln!(writer, "\nCheck passed.")?;
         Ok(())
+    } else {
+        // Render stats and the grouped report exactly once, then summarize
+        // every tripped gate. Evaluation is separated from rendering so the
+        // report is never re-emitted per gate.
+        reporter.report_full(result, writer)?;
+        for breach in &outcome.failed_gates {
+            writeln!(writer, "\nCheck FAILED: {}", breach.summary())?;
+        }
+        Err(CliError::CheckFailed)
     }
 }
 
@@ -844,50 +813,131 @@ fn write_ignore_entries<'a>(
     Ok(())
 }
 
-/// Report one exceeded group-count threshold, returning whether it failed.
-fn check_count_threshold(
-    threshold: Option<usize>,
-    count: usize,
-    label: &str,
-    result: &AnalysisResult,
-    reporter: &dyn Reporter,
-    writer: &mut dyn Write,
-) -> io::Result<bool> {
-    if let Some(threshold) = threshold
-        && count > threshold
-    {
-        writeln!(
-            writer,
-            "\nCheck FAILED: {count} {label} duplicate groups (max: {threshold})"
-        )?;
-        reporter.report_full(result, writer)?;
-        return Ok(true);
-    }
-    Ok(false)
+/// A duplicate-detection dimension that a `check` gate guards.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GateDimension {
+    Exact,
+    Near,
 }
 
-/// Report one exceeded percentage threshold, returning whether it failed.
-fn check_percent_threshold(
-    threshold: Option<f64>,
-    actual: f64,
-    label: &str,
-    groups: &[DuplicateGroup],
-    section: ReportSection,
-    reporter: &dyn Reporter,
-    writer: &mut dyn Write,
-) -> io::Result<bool> {
-    let Some(threshold) = threshold else {
-        return Ok(false);
-    };
-    if actual <= threshold {
-        return Ok(false);
+impl GateDimension {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Exact => "exact",
+            Self::Near => "near",
+        }
     }
-    writeln!(
-        writer,
-        "\nCheck FAILED: {actual:.1}% {label} duplicate lines (max: {threshold:.1}%)"
-    )?;
-    reporter.report_groups(groups, writer, section)?;
-    Ok(true)
+}
+
+/// One `check` threshold that was exceeded.
+#[derive(Debug, Clone, PartialEq)]
+enum GateBreach {
+    Count {
+        dimension: GateDimension,
+        observed: usize,
+        limit: usize,
+    },
+    Percent {
+        dimension: GateDimension,
+        observed: f64,
+        limit: f64,
+    },
+}
+
+impl GateBreach {
+    /// Failure summary line, without the leading `Check FAILED: ` prefix.
+    fn summary(&self) -> String {
+        match *self {
+            Self::Count {
+                dimension,
+                observed,
+                limit,
+            } => {
+                let label = dimension.label();
+                format!("{observed} {label} duplicate groups (max: {limit})")
+            }
+            Self::Percent {
+                dimension,
+                observed,
+                limit,
+            } => {
+                let label = dimension.label();
+                format!("{observed:.1}% {label} duplicate lines (max: {limit:.1}%)")
+            }
+        }
+    }
+}
+
+/// The outcome of a `check`: whether it passed, and every gate it tripped.
+#[derive(Debug, Clone, PartialEq)]
+struct CheckOutcome {
+    passed: bool,
+    failed_gates: Vec<GateBreach>,
+}
+
+/// Evaluate every `check` gate against the stats, collecting all breaches.
+///
+/// Pure: gate evaluation is kept separate from rendering so the report is
+/// emitted exactly once regardless of how many gates trip.
+fn evaluate_check(thresholds: &CheckThresholds, stats: &DuplicationStats) -> CheckOutcome {
+    let exact_group_count = stats.exact_duplicate_groups
+        + stats.sub_exact_groups
+        + stats.token_normalized_exact_groups
+        + stats.token_raw_exact_groups
+        + stats.line_exact_groups;
+    let near_group_count =
+        stats.near_duplicate_groups + stats.sub_near_groups + stats.token_normalized_near_groups;
+
+    let failed_gates: Vec<GateBreach> = [
+        exceeded(thresholds.max_exact, exact_group_count).map(|(observed, limit)| {
+            GateBreach::Count {
+                dimension: GateDimension::Exact,
+                observed,
+                limit,
+            }
+        }),
+        exceeded(thresholds.max_near, near_group_count).map(|(observed, limit)| {
+            GateBreach::Count {
+                dimension: GateDimension::Near,
+                observed,
+                limit,
+            }
+        }),
+        exceeded(
+            thresholds.max_exact_percent,
+            stats.exact_duplicate_percent(),
+        )
+        .map(|(observed, limit)| GateBreach::Percent {
+            dimension: GateDimension::Exact,
+            observed,
+            limit,
+        }),
+        exceeded(thresholds.max_near_percent, stats.near_duplicate_percent()).map(
+            |(observed, limit)| GateBreach::Percent {
+                dimension: GateDimension::Near,
+                observed,
+                limit,
+            },
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    CheckOutcome {
+        passed: failed_gates.is_empty(),
+        failed_gates,
+    }
+}
+
+/// The `(observed, limit)` pair when `observed` exceeds an optional limit, or
+/// `None` when the gate is unset or within budget. One generic gate test keeps
+/// the count and percentage dimensions from diverging into parallel helpers.
+fn exceeded<T: Copy + PartialOrd>(limit: Option<T>, observed: T) -> Option<(T, T)> {
+    match limit {
+        Some(limit) if observed > limit => Some((observed, limit)),
+        _ => None,
+    }
 }
 
 fn write_ignore_entry(writer: &mut impl Write, entry: &IgnoreEntry) -> io::Result<()> {
@@ -906,6 +956,7 @@ mod tests {
     use super::*;
     use crate::code_unit::{CodeUnit, CodeUnitKind, DetectionDimension};
     use crate::grouper::{DuplicationStats, MatchKind};
+    use crate::output::ReportSection;
     use crate::output::test_support;
     use tempfile::TempDir;
 
@@ -933,6 +984,119 @@ mod tests {
         let mut result = empty_result();
         result.line_exact_groups = vec![group];
         result
+    }
+
+    fn stats_with_groups(exact_groups: usize, near_groups: usize) -> DuplicationStats {
+        DuplicationStats {
+            exact_duplicate_groups: exact_groups,
+            near_duplicate_groups: near_groups,
+            ..Default::default()
+        }
+    }
+
+    /// Reporter that counts full-report renders and rejects the render paths a
+    /// failing `check` must never take, so a test can assert the failure path
+    /// renders exactly once instead of re-rendering per tripped gate. The three
+    /// methods stay structurally distinct so they do not register as twins.
+    #[derive(Default)]
+    struct CountingReporter {
+        full_renders: std::cell::Cell<usize>,
+    }
+
+    impl Reporter for CountingReporter {
+        fn report_full(
+            &self,
+            _result: &AnalysisResult,
+            _writer: &mut dyn std::io::Write,
+        ) -> std::io::Result<()> {
+            self.full_renders.set(self.full_renders.get() + 1);
+            Ok(())
+        }
+
+        fn report_stats(
+            &self,
+            _stats: &DuplicationStats,
+            _writer: &mut dyn std::io::Write,
+        ) -> std::io::Result<()> {
+            panic!("a failing check renders the full report, never bare stats")
+        }
+
+        fn report_groups(
+            &self,
+            _groups: &[DuplicateGroup],
+            _writer: &mut dyn std::io::Write,
+            _section: ReportSection,
+        ) -> std::io::Result<()> {
+            unreachable!("cmd_check never renders an individual section")
+        }
+    }
+
+    #[test]
+    fn evaluate_check_collects_each_breached_gate_once() {
+        let thresholds = CheckThresholds {
+            max_exact: Some(0),
+            max_near: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(
+            evaluate_check(&thresholds, &stats_with_groups(1, 1)),
+            CheckOutcome {
+                passed: false,
+                failed_gates: vec![
+                    GateBreach::Count {
+                        dimension: GateDimension::Exact,
+                        observed: 1,
+                        limit: 0,
+                    },
+                    GateBreach::Count {
+                        dimension: GateDimension::Near,
+                        observed: 1,
+                        limit: 0,
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn evaluate_check_passes_within_thresholds() {
+        assert_eq!(
+            evaluate_check(&CheckThresholds::default(), &stats_with_groups(1, 1)),
+            CheckOutcome {
+                passed: true,
+                failed_gates: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn cmd_check_renders_once_on_multi_gate_failure() {
+        let result = test_support::analysis_result(
+            stats_with_groups(1, 1),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        );
+        let reporter = CountingReporter::default();
+        let mut sink = Vec::new();
+        let thresholds = CheckThresholds {
+            max_exact: Some(0),
+            max_near: Some(0),
+            ..Default::default()
+        };
+
+        let err = cmd_check(
+            &Config::default(),
+            &result,
+            &reporter,
+            &mut sink,
+            &thresholds,
+        )
+        .expect_err("two tripped gates must fail the check");
+
+        assert!(matches!(err, CliError::CheckFailed));
+        // Exactly one render call — the bug re-rendered stats + report per gate.
+        assert_eq!(reporter.full_renders.get(), 1);
     }
 
     #[test]
