@@ -1,11 +1,9 @@
 {
   "threshold": 0,
   "reporters": [
-    "html",
-    "json",
     "markdown",
     "ai",
-    "console"
+    "json"
   ],
   "ignore": [
     "**/__snapshots__/**",
@@ -17,16 +15,17 @@
     "**/reports/**",
     "**/build/**",
     "**/target/**",
-    "**/vendor/**",
-    "**/refactor/**",
-    "**/cargo-dupes/tests/fixtures/**",
-    "**/code-dupes/tests/fixtures/**"
+    "**/vendor/**"
   ],
   "format": [
     "rust"
   ],
   "output": "./cov",
   "absolute": true,
-  "minLines": 2,
-  "minTokens": 50
+  "minLines": 8,
+  "minTokens": 50,
+  "no-tips": true,
+  "ignorePattern": [
+    "(?m)^\\s*use\\s+[^;]+;"
+  ]
 }
