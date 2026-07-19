@@ -1,3 +1,5 @@
+//! Shared report/stats output suite stamped against the `cargo-dupes` binary.
+
 // jscpd:ignore-start
 
 mod common;

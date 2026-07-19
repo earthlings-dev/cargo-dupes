@@ -7,9 +7,13 @@
 use std::path::Path;
 
 use dupes_core::analyzer::LanguageAnalyzer;
-use dupes_core::code_unit::{CodeUnit, CodeUnitKind};
+use dupes_core::code_unit::CodeUnit;
+use dupes_core::code_unit::CodeUnitKind;
 use dupes_core::config::AnalysisConfig;
-use dupes_core::node::{BinOpKind, LiteralKind, NodeKind, UnOpKind};
+use dupes_core::node::BinOpKind;
+use dupes_core::node::LiteralKind;
+use dupes_core::node::NodeKind;
+use dupes_core::node::UnOpKind;
 use dupes_treesitter::TreeSitterAnalyzer;
 use dupes_treesitter::mapping::NodeMapping;
 
@@ -43,57 +47,51 @@ const PYTHON_QUERY: &str = r"
 /// prefix (pytest conventions).
 #[derive(Debug)]
 pub struct PythonAnalyzer {
-    inner: TreeSitterAnalyzer,
+  inner: TreeSitterAnalyzer,
 }
 
 impl PythonAnalyzer {
-    /// Create a new `PythonAnalyzer`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the built-in tree-sitter query is invalid (should never happen).
-    #[must_use]
-    pub fn new() -> Self {
-        let inner = TreeSitterAnalyzer::new(
-            tree_sitter_python::LANGUAGE.into(),
-            &["py", "pyi"],
-            PYTHON_QUERY,
-            python_mapping(),
-        )
-        .expect("built-in Python query should be valid")
-        .with_kind_resolver(|node_kind| match node_kind {
-            "lambda" => CodeUnitKind::Closure,
-            "class_definition" => CodeUnitKind::Class,
-            _ => CodeUnitKind::Function,
-        })
-        .with_test_detector(|name, node| {
-            name.starts_with("test_")
-                || (node.kind() == "class_definition" && name.starts_with("Test"))
-        });
+  /// Create a new `PythonAnalyzer`.
+  ///
+  /// # Panics
+  ///
+  /// Panics if the built-in tree-sitter query is invalid (should never happen).
+  #[must_use]
+  pub fn new() -> Self {
+    let inner = TreeSitterAnalyzer::new(tree_sitter_python::LANGUAGE.into(), &["py", "pyi"], PYTHON_QUERY, python_mapping())
+      .expect("built-in Python query should be valid")
+      .with_kind_resolver(|node_kind| match node_kind {
+        "lambda" => CodeUnitKind::Closure,
+        "class_definition" => CodeUnitKind::Class,
+        _ => CodeUnitKind::Function,
+      })
+      .with_test_detector(|name, node| name.starts_with("test_") || (node.kind() == "class_definition" && name.starts_with("Test")));
 
-        Self { inner }
+    Self {
+      inner,
     }
+  }
 }
 
 impl Default for PythonAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
+  fn default() -> Self {
+    Self::new()
+  }
 }
 
 impl LanguageAnalyzer for PythonAnalyzer {
-    fn file_extensions(&self) -> &[&str] {
-        self.inner.file_extensions()
-    }
+  fn file_extensions(&self) -> &[&str] {
+    self.inner.file_extensions()
+  }
 
-    fn parse_file(
-        &self,
-        path: &Path,
-        source: &str,
-        config: &AnalysisConfig,
-    ) -> Result<Vec<CodeUnit>, Box<dyn std::error::Error + Send + Sync>> {
-        self.inner.parse_file(path, source, config)
-    }
+  fn parse_file(
+    &self,
+    path: &Path,
+    source: &str,
+    config: &AnalysisConfig,
+  ) -> Result<Vec<CodeUnit>, Box<dyn std::error::Error + Send + Sync>> {
+    self.inner.parse_file(path, source, config)
+  }
 }
 
 // jscpd:ignore-start
@@ -103,7 +101,8 @@ impl LanguageAnalyzer for PythonAnalyzer {
 /// # Covered constructs
 ///
 /// - Identifiers, literals (int, float, str, bool, None)
-/// - Binary operators (+, -, *, /, //, **, %, ==, !=, <, >, <=, >=, and, or, in, not in, is, is not, bitwise, augmented assignment)
+/// - Binary operators (+, -, *, /, //, **, %, ==, !=, <, >, <=, >=, and, or, in, not in, is, is
+///   not, bitwise, augmented assignment)
 /// - Unary operators (not, -, ~)
 /// - Control flow: if, for, while, match/case, return, break, continue
 /// - Calls, assignments (plain + augmented), blocks, function definitions
@@ -113,133 +112,127 @@ impl LanguageAnalyzer for PythonAnalyzer {
 ///
 /// # Not yet covered (intentional omissions for initial implementation)
 ///
-/// - `with_statement` / `try_statement` / `raise_statement` / `assert_statement` —
-///   fall through to generic recursion (structure is preserved, semantic kind is lost)
+/// - `with_statement` / `try_statement` / `raise_statement` / `assert_statement` — fall through to
+///   generic recursion (structure is preserved, semantic kind is lost)
 /// - `conditional_expression` (ternary `x if cond else y`) — falls through to Block
 /// - List/dict/set comprehensions — children are recursively normalized
 /// - `global_statement` / `nonlocal_statement` — fall through
-/// - f-string interpolations — the `string` node is treated as `Literal(Str)`,
-///   so interpolated expressions inside f-strings are not captured
+/// - f-string interpolations — the `string` node is treated as `Literal(Str)`, so interpolated
+///   expressions inside f-strings are not captured
 /// - `pass_statement` / `ellipsis` — become Opaque leaves (acceptable no-ops)
-/// - Decorator-based test detection (e.g., `@pytest.fixture`) — only name-based `test_`/`Test` prefix
+/// - Decorator-based test detection (e.g., `@pytest.fixture`) — only name-based `test_`/`Test`
+///   prefix
 /// - Lambda test detection — lambdas inside test functions are not tagged as test code
 #[must_use]
 pub fn python_mapping() -> NodeMapping {
-    NodeMapping::new()
-        .identifiers(&["identifier"])
-        .literals(&[
-            ("integer", LiteralKind::Int),
-            ("float", LiteralKind::Float),
-            ("string", LiteralKind::Str),
-            ("true", LiteralKind::Bool),
-            ("false", LiteralKind::Bool),
-            ("none", LiteralKind::Null),
-        ])
-        .binary_ops(&[
-            // Arithmetic
-            ("+", BinOpKind::Add),
-            ("-", BinOpKind::Sub),
-            ("*", BinOpKind::Mul),
-            ("/", BinOpKind::Div),
-            ("%", BinOpKind::Rem),
-            // Comparison
-            ("==", BinOpKind::Eq),
-            ("!=", BinOpKind::Ne),
-            ("<", BinOpKind::Lt),
-            (">", BinOpKind::Gt),
-            ("<=", BinOpKind::Le),
-            (">=", BinOpKind::Ge),
-            // Logical
-            ("and", BinOpKind::And),
-            ("or", BinOpKind::Or),
-            // Bitwise
-            ("&", BinOpKind::BitAnd),
-            ("|", BinOpKind::BitOr),
-            ("^", BinOpKind::BitXor),
-            ("<<", BinOpKind::Shl),
-            (">>", BinOpKind::Shr),
-            // Augmented assignment operators
-            ("+=", BinOpKind::AddAssign),
-            ("-=", BinOpKind::SubAssign),
-            ("*=", BinOpKind::MulAssign),
-            ("/=", BinOpKind::DivAssign),
-            ("%=", BinOpKind::RemAssign),
-            ("&=", BinOpKind::BitAndAssign),
-            ("|=", BinOpKind::BitOrAssign),
-            ("^=", BinOpKind::BitXorAssign),
-            ("<<=", BinOpKind::ShlAssign),
-            (">>=", BinOpKind::ShrAssign),
-            // Floor division and power
-            ("//", BinOpKind::FloorDiv),
-            ("**", BinOpKind::Pow),
-            ("//=", BinOpKind::FloorDivAssign),
-            ("**=", BinOpKind::PowAssign),
-            // Membership and identity
-            ("in", BinOpKind::In),
-            ("not in", BinOpKind::NotIn),
-            ("is", BinOpKind::Is),
-            ("is not", BinOpKind::IsNot),
-        ])
-        .unary_ops(&[
-            ("not", UnOpKind::Not),
-            ("-", UnOpKind::Neg),
-            ("~", UnOpKind::Other),
-        ])
-        .skip(&["comment", "decorator"])
-        .blocks(&["block"])
-        .calls(&["call"])
-        .returns(&["return_statement"])
-        .ifs(&["if_statement"])
-        .for_loops(&["for_statement"])
-        .while_loops(&["while_statement"])
-        .matches(&["match_statement"])
-        .assignments(&["assignment"])
-        .function_defs(&["function_definition"])
-        .binary_op_kinds(&[
-            "binary_operator",
-            "boolean_operator",
-            "comparison_operator",
-            "augmented_assignment",
-        ])
-        .unary_op_kinds(&["not_operator", "unary_operator"])
-        .match_arms(&["case_clause"])
-        .node_kinds(&[
-            // Control flow leaves
-            ("break_statement", NodeKind::Break),
-            ("continue_statement", NodeKind::Continue),
-            // Async
-            ("await", NodeKind::Await),
-            ("yield", NodeKind::Yield),
-            // Containers
-            ("tuple", NodeKind::Tuple),
-            ("list", NodeKind::Array),
-            ("set", NodeKind::Set),
-            ("dictionary", NodeKind::StructInit),
-            // Access
-            ("attribute", NodeKind::FieldAccess),
-            ("subscript", NodeKind::Index),
-        ])
+  NodeMapping::new()
+    .identifiers(&["identifier"])
+    .literals(&[
+      ("integer", LiteralKind::Int),
+      ("float", LiteralKind::Float),
+      ("string", LiteralKind::Str),
+      ("true", LiteralKind::Bool),
+      ("false", LiteralKind::Bool),
+      ("none", LiteralKind::Null),
+    ])
+    .binary_ops(&[
+      // Arithmetic
+      ("+", BinOpKind::Add),
+      ("-", BinOpKind::Sub),
+      ("*", BinOpKind::Mul),
+      ("/", BinOpKind::Div),
+      ("%", BinOpKind::Rem),
+      // Comparison
+      ("==", BinOpKind::Eq),
+      ("!=", BinOpKind::Ne),
+      ("<", BinOpKind::Lt),
+      (">", BinOpKind::Gt),
+      ("<=", BinOpKind::Le),
+      (">=", BinOpKind::Ge),
+      // Logical
+      ("and", BinOpKind::And),
+      ("or", BinOpKind::Or),
+      // Bitwise
+      ("&", BinOpKind::BitAnd),
+      ("|", BinOpKind::BitOr),
+      ("^", BinOpKind::BitXor),
+      ("<<", BinOpKind::Shl),
+      (">>", BinOpKind::Shr),
+      // Augmented assignment operators
+      ("+=", BinOpKind::AddAssign),
+      ("-=", BinOpKind::SubAssign),
+      ("*=", BinOpKind::MulAssign),
+      ("/=", BinOpKind::DivAssign),
+      ("%=", BinOpKind::RemAssign),
+      ("&=", BinOpKind::BitAndAssign),
+      ("|=", BinOpKind::BitOrAssign),
+      ("^=", BinOpKind::BitXorAssign),
+      ("<<=", BinOpKind::ShlAssign),
+      (">>=", BinOpKind::ShrAssign),
+      // Floor division and power
+      ("//", BinOpKind::FloorDiv),
+      ("**", BinOpKind::Pow),
+      ("//=", BinOpKind::FloorDivAssign),
+      ("**=", BinOpKind::PowAssign),
+      // Membership and identity
+      ("in", BinOpKind::In),
+      ("not in", BinOpKind::NotIn),
+      ("is", BinOpKind::Is),
+      ("is not", BinOpKind::IsNot),
+    ])
+    .unary_ops(&[("not", UnOpKind::Not), ("-", UnOpKind::Neg), ("~", UnOpKind::Other)])
+    .skip(&["comment", "decorator"])
+    .blocks(&["block"])
+    .calls(&["call"])
+    .returns(&["return_statement"])
+    .ifs(&["if_statement"])
+    .for_loops(&["for_statement"])
+    .while_loops(&["while_statement"])
+    .matches(&["match_statement"])
+    .assignments(&["assignment"])
+    .function_defs(&["function_definition"])
+    .binary_op_kinds(&[
+      "binary_operator", "boolean_operator", "comparison_operator", "augmented_assignment",
+    ])
+    .unary_op_kinds(&["not_operator", "unary_operator"])
+    .match_arms(&["case_clause"])
+    .node_kinds(&[
+      // Control flow leaves
+      ("break_statement", NodeKind::Break),
+      ("continue_statement", NodeKind::Continue),
+      // Async
+      ("await", NodeKind::Await),
+      ("yield", NodeKind::Yield),
+      // Containers
+      ("tuple", NodeKind::Tuple),
+      ("list", NodeKind::Array),
+      ("set", NodeKind::Set),
+      ("dictionary", NodeKind::StructInit),
+      // Access
+      ("attribute", NodeKind::FieldAccess),
+      ("subscript", NodeKind::Index),
+    ])
 }
 
 // jscpd:ignore-end
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+  use super::*;
 
-    #[test]
-    fn new_does_not_panic() {
-        let _ = PythonAnalyzer::new();
-    }
+  #[test]
+  fn new_does_not_panic() {
+    let _ = PythonAnalyzer::new();
+  }
 
-    #[test]
-    fn default_does_not_panic() {
-        let _ = PythonAnalyzer::default();
-    }
+  #[test]
+  fn default_does_not_panic() {
+    let _ = PythonAnalyzer::default();
+  }
 
-    #[test]
-    fn file_extensions() {
-        let analyzer = PythonAnalyzer::new();
-        assert_eq!(analyzer.file_extensions(), &["py", "pyi"]);
-    }
+  #[test]
+  fn file_extensions() {
+    let analyzer = PythonAnalyzer::new();
+    assert_eq!(analyzer.file_extensions(), &["py", "pyi"]);
+  }
 }

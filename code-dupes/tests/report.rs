@@ -1,3 +1,5 @@
+//! Shared report/stats output suite stamped against the `code-dupes` binary.
+
 // jscpd:ignore-start
 
 mod common;

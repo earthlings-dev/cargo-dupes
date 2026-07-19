@@ -1,3 +1,5 @@
+//! Shared option-handling suite stamped against the `cargo-dupes` binary.
+
 mod common;
 
 dupes_cli_test_support::cli_support_tests! {

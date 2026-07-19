@@ -21,15 +21,21 @@ pub mod normalizer;
 
 // Re-export primary types for convenience
 pub use analyzer::TreeSitterAnalyzer;
-pub use extractor::{KindResolver, extract_code_units};
-pub use mapping::NodeMapping;
-pub use normalizer::normalize_ts_node;
-
 // Re-export commonly needed dupes-core types
-pub use dupes_core::code_unit::{CodeUnit, CodeUnitKind};
+pub use dupes_core::code_unit::{
+  CodeUnit,
+  CodeUnitKind,
+};
 pub use dupes_core::config::AnalysisConfig;
 pub use dupes_core::fingerprint::Fingerprint;
-pub use dupes_core::node::{
-    BinOpKind, LiteralKind, NodeKind, NormalizationContext, NormalizedNode, PlaceholderKind,
-    UnOpKind,
-};
+pub use dupes_core::node::BinOpKind;
+pub use dupes_core::node::LiteralKind;
+pub use dupes_core::node::NodeKind;
+pub use dupes_core::node::NormalizationContext;
+pub use dupes_core::node::NormalizedNode;
+pub use dupes_core::node::PlaceholderKind;
+pub use dupes_core::node::UnOpKind;
+pub use extractor::KindResolver;
+pub use extractor::extract_code_units;
+pub use mapping::NodeMapping;
+pub use normalizer::normalize_ts_node;

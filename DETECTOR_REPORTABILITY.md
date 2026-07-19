@@ -211,7 +211,7 @@ Two self-corpus classes are deliberately reported and must never be hidden by a 
 
 The suppression rule registry (this document) is global detector policy. `.dupes-ignore.toml` is a per-project end-user facility: applied only after live groups exist, filtered from both populations, counted in stats (`Ignored (registry): N groups`), never shown, and never consulted during detection. The `ignore`/`ignored`/`cleanup` commands, drift-resilient entry matching, and the migration procedure are shipped product behavior, covered by fixture-local CLI tests.
 
-This repository's own `.dupes-ignore.toml` holds the entries adjudicated as valid and intentional: predominantly deliberate test parity (test patterns, helpers, scaffolding), plus mapping/builder-chain parity, trait-signature and trait-impl parity, structural-only token matches, classifier/normalizer dispatch arms, trivial shapes, and idiomatic guards, each with a reason. Self-corpus findings outside those classes are resolved in code — extractable duplication is refactored and own-collateral twins are consolidated, never registered — so the canonical self-corpus default report stays empty.
+This repository does not carry a `.dupes-ignore.toml` registry. Every self-corpus finding above the configured analysis floors must be resolved at its owning abstraction; no production or test duplicate is admitted by fingerprint.
 
 ## Shapes Not To Suppress Globally
 

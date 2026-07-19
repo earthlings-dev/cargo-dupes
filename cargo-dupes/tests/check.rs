@@ -1,3 +1,5 @@
+//! Shared `check` threshold suite stamped against the `cargo-dupes` binary.
+
 // jscpd:ignore-start
 
 mod common;

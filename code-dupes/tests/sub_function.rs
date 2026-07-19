@@ -1,3 +1,5 @@
+//! Shared sub-function detection suite stamped against the `code-dupes` binary.
+
 // jscpd:ignore-start
 
 mod common;

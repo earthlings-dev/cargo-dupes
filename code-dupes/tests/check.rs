@@ -1,3 +1,5 @@
+//! Shared `check` threshold suite stamped against the `code-dupes` binary.
+
 // jscpd:ignore-start
 
 mod common;
