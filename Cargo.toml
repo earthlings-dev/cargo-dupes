@@ -28,7 +28,7 @@ license-file = "LICENSE"
 
 [workspace]
 members  = [
-    "xtask",
+    "stask",
     "dupes-core",
     "dupes-treesitter",
     "dupes-python",
@@ -60,10 +60,10 @@ dupes-python = { path = "dupes-python", version = "0.3.0" }
 dupes-rust = { path = "dupes-rust", version = "0.3.0" }
 
 # CLI
-bpaf = {  version = "0.10", features = [ "autocomplete", "batteries", "dull-color", "docgen" ], default-features = false, git = "https://github.com/strict-rs/strict-bpaf.git", branch = "sync" }
+bpaf = {  version = "0.10", features = [ "autocomplete", "batteries", "dull-color", "docgen" ], default-features = false, git = "https://github.com/strict-rs/strict-bpaf.git", branch = "sync"}
 
 # Errors — derive Display / Error / From for the workspace's typed error enums.
-thiserror = { version = "2"}
+thiserror = { version = "2", git = "https://github.com/strict-rs/strict-thiserror.git", branch = "upgrade"}
 
 # Panic-free test vocabulary, consumed as an external git crate, tracking the
 # crate's main branch. The version requirement (kept in sync with the crate's own
@@ -71,13 +71,13 @@ thiserror = { version = "2"}
 # resolved commit, refreshed by `cargo update -p strict-test-support`.
 strict-test-support = { version = "0.1.0", git = "https://github.com/earthlings-dev/strict-test-support-rs.git", branch = "main"}
 
-# Source analysis — powers the `cq` cyclomatic-complexity gate in xtask.
+# Source analysis — powers the `cq` cyclomatic-complexity gate in stask.
 # `span-locations` makes `proc_macro2::Span::start().line` meaningful outside a
-# proc-macro (xtask parses files in a normal binary).
-syn         = { version = "2", features = ["full", "visit", "extra-traits"] }
+# proc-macro (stask parses files in a normal binary).
+syn         = { version = "3", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 
-# Workspace introspection — xtask uses `cargo metadata` (via this crate) to find
+# Workspace introspection — stask uses `cargo metadata` (via this crate) to find
 # the workspace root for `ensure_root` and to map a path operand to its owning
 # crate for scoped commands, instead of hand-rolling manifest discovery.
 cargo_metadata = "0.23"
@@ -92,24 +92,24 @@ serde_json = "1"
 # instead of hard-coding claims that could rot.
 toml = "1.1"
 
-# Terminal styling — xtask uses semantic styles and renders ANSI only through a
+# Terminal styling — stask uses semantic styles and renders ANSI only through a
 # shared color policy.
 anstyle = "1"
 
-# Synchronous mutex — backs the capturable `Output` sink in xtask so tests can
+# Synchronous mutex — backs the capturable `Output` sink in stask so tests can
 # capture semantic output instead of leaking it to the terminal. `std::sync`
 # `Mutex`/`RwLock` are disallowed in clippy.toml ("prefer parking_lot in sync
-# code"); xtask is fully synchronous, so the await-holding hazard never applies.
+# code"); stask is fully synchronous, so the await-holding hazard never applies.
 parking_lot = "0.12"
 
 tracing            = { version = "0.1.44", git = "https://github.com/strict-rs/strict-tracing.git", branch = "strict"}
 tracing-subscriber = { version = "0.3.23", git = "https://github.com/strict-rs/strict-tracing.git", branch = "strict"}
 
-template-core = { version = "0.1.0", git = "https://github.com/earthlings-dev/template-rs.git", branch = "main"}
-template-xtask = { version = "0.1.0", git = "https://github.com/earthlings-dev/template-rs.git", branch = "main"}
-trybuild = {  version = "1", git = "https://github.com/strict-rs/strict-trybuild.git", branch = "strict" }
+template-core = { version = "0.3.0", git = "https://github.com/earthlings-dev/template-rs.git", branch = "main"}
+template-stask = { version = "0.3.0", git = "https://github.com/earthlings-dev/template-rs.git", branch = "main"}
+trybuild = {  version = "1", git = "https://github.com/strict-rs/strict-trybuild.git", branch = "strict"}
 snapbox = { version = "1.2", features = ["diff"], default-features = false }
-proptest = {  version = "2", features = ["std", "strict-test"], default-features = false, git = "https://github.com/strict-rs/strict-proptest.git", branch = "strict" }
+proptest = {  version = "2", features = ["std", "strict-test"], default-features = false, git = "https://github.com/strict-rs/strict-proptest.git", branch = "strict"}
 toml_edit = "0.25"
 
 # ─── Release profile: small, fast, abort-on-panic ──────────────────────────
@@ -532,22 +532,5 @@ blanket_clippy_restriction_lints         = "allow"   # we intentionally enable r
 
 
 
-[patch."https://github.com/earthlings-dev/cargo-dupes"]
-xtask = { path = "xtask" }
-dupes-core = { path = "dupes-core" }
-dupes-treesitter = { path = "dupes-treesitter" }
-dupes-python = { path = "dupes-python" }
-dupes-rust = { path = "dupes-rust" }
-cargo-dupes = { path = "cargo-dupes" }
-code-dupes = { path = "code-dupes" }
-dupes-cli-test-support = { path = "dupes-cli-test-support" }
-
-[patch."https://github.com/earthlings-dev/cargo-dupes.git"]
-xtask = { path = "xtask" }
-dupes-core = { path = "dupes-core" }
-dupes-treesitter = { path = "dupes-treesitter" }
-dupes-python = { path = "dupes-python" }
-dupes-rust = { path = "dupes-rust" }
-cargo-dupes = { path = "cargo-dupes" }
-code-dupes = { path = "code-dupes" }
-dupes-cli-test-support = { path = "dupes-cli-test-support" }
+[patch.crates-io]
+"thiserror" = {  version = "2.1.0", git = "https://github.com/strict-rs/strict-thiserror.git", branch = "upgrade" }
